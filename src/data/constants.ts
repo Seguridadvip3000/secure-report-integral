@@ -1,142 +1,162 @@
-export const PROYECTOS = [
-  "ESTACIONAMIENTO CCCT",
-  "COMERCIO CCCT",
-  "NIKEL 3",
-  "SECTOR YAREY",
-  "HOTEL CCT",
-  "CENTRO JOYERO",
-  "EXPRESO CHACAITO",
-  "EXPRESO BARUTA",
-  "EXPRESO LA TRINIDAD",
-  "GALERIA SEBUCAN",
-  "CC GALERIA PRADO DEL ESTE",
-  "CC UNICO",
-  "CC VIZCAYA",
-  "CC CONCRESA",
-  "CENTRO PLAZA",
-  "ACADEMIA WASHINGTON",
-  "CC CASCADA CARRIZAL",
-  "CECOM CASCADA CARRIZAL",
-  "CC CASCADA MATURIN",
-  "HOTEL CASCADA MATURIN",
-  "GOKARTS",
-  "DUNCAN LOS RUICES",
-  "DUNCAN LA CALIFORNIA",
-  "LA GRANJA",
-  "CC LAS TRINITARIAS",
-  "HOTEL TRINITARIAS SUITS",
-  "RESIDENCIA ASOPRASUR",
-  "RESIDENCIA ESCAMPADERO",
-  "RESID. LA HACIENDA",
-  "RESID. VILLA SALVA III",
-  "RESID. QUINZANDAL",
-  "RESID. ESPOSALLE",
-  "RESID. EDEN PARK",
-  "RESID. ASONAPOLEON",
-  "RESID. YARIBU",
-  "COUNTRY",
-  "GALPS IND MONTERREY",
-  "GALPS IND IMPAL",
-  "ENTIDADES BANCARIAS",
-  "FUERZA AEREA MARACAY",
-  "RESIDENCIAS PARAISO LOS CHORROS",
+export const PROYECTOS: string[] = [
+  'ACADEMIA WASHINGTON',
+  'ASOPRASUR',
+  'BANCO DE VENEZUELA SEDE PRINCIPAL',
+  'BARUTA',
+  'CAMPO CLARO',
+  'CARONOCO',
+  'CCCT',
+  'CENTRO PLAZA',
+  'CHACAITO',
+  'COMERCIO CCCT',
+  'CONCRESA',
+  'DUNCAN LA CALIFORNIA',
+  'ESTACIONAMIENTO CCCT',
+  'GALP 02 Y 03 VALENCIA',
+  'GALP 110',
+  'GALP IMPAL',
+  'GALP MONTERREY',
+  'GALPS IND IMPAL',
+  'GALPS IND MONTERREY',
+  'GALPS. INDUSTRIAL',
+  'GALPS. MARACAY',
+  'INCAMETAL',
+  'LA CALIFORNIA',
+  'LA GRANJA',
+  'LAB. GALP 141 Y 142',
+  'LAB. GALP 34',
+  'MULTICENTRO EMPRESARIAL DEL ESTE',
+  'OFICINA PRINCIPAL',
+  'PRADOS DEL ESTE',
+  'RESID. EDEN PARK',
+  'RESID. QUINZANDAL',
+  'RESID. VISTA REAL',
+  'SEDE PRINCIPAL',
+  'SUELOPETROL',
+  'TORRE BRITANICA',
+  'TRINIDAD',
+  'TRINITARIAS',
+  'URBANIZACION SAN ROMAN',
+  'VALENCIA',
+  'YARIBU',
 ];
 
-export const PROYECTOS_EXCLUIDOS = [
-  "HIERROBECO",
-  "GALP HIERROBECO BQTO",
-  "TERRENOS LA ONZA",
-  "TERRENO LA ONZA",
-  "TERRENOS ARAUCA",
-  "TERRENO ARAUCA",
+// Proyectos eliminados definitivamente de los listados
+export const PROYECTOS_EXCLUIDOS: string[] = [
+  'HIERROBECO',
+  'GALP HIERROBECO BQTO',
+  'TERRENO LA ONZA',
+  'TERRENOS LA ONZA',
+  'TERRENO ARAUCA',
+  'TERRENOS ARAUCA',
 ];
 
-export type ConfigHorarioProyecto = {
+export type HorarioPermitido = 'MIXTO' | '24X24' | '48X48' | 'DIURNO' | 'NOCTURNO';
+
+export interface ConfigHorarioProyecto {
+  turnosPermitidos: HorarioPermitido[];
   tieneLider: boolean;
-  turnosPermitidos: ('MIXTO' | 'DIURNO' | 'NOCTURNO' | '24X24' | '48X48')[];
-  esCombinado?: boolean;
-};
+  esCombinado: boolean;
+}
+
+// 1. Proyectos con MIXTO + DIURNO
+const PROYECTOS_COMBINADO_MIXTO_DIURNO = new Set([
+  'CENTRO PLAZA',
+  'CONCRESA',
+  'CHACAITO',
+  'BARUTA',
+  'LA GRANJA',
+  'TRINIDAD',
+  'ASOPRASUR',
+  'ASOPROSUR',
+]);
+
+// 2. Proyectos con DIURNO y NOCTURNO (sin Mixto)
+const PROYECTOS_DIURNO_NOCTURNO = new Set([
+  'TRINITARIAS',
+]);
+
+// 3. Proyectos SOLO DIURNO (Entidades Bancarias)
+const PROYECTOS_SOLO_DIURNO = new Set([
+  'BANCO DE VENEZUELA SEDE PRINCIPAL',
+  'ENTIDADES BANCARIAS',
+  'BANCO DE VENEZUELA',
+  'BANCO MERCANTIL',
+  'BANCO PROVINCIAL',
+  'BANESCO',
+  'BNC',
+  'BANCARIBE',
+  'BANCO DEL TESORO',
+  'BANCO BICENTENARIO',
+]);
+
+// 4. Proyectos 48x48 con fin de semana alterno (V-S-D) y SIN Líder
+const PROYECTOS_48X48_SIN_LIDER = new Set([
+  'RESID. EDEN PARK',
+  'GALPS IND MONTERREY',
+  'GALP MONTERREY',
+  'RESID. QUINZANDAL',
+  'GALPS IND IMPAL',
+  'GALP IMPAL',
+]);
+
+// 5. Proyectos 24x24
+const PROYECTOS_24X24 = new Set([
+  'RESID. VISTA REAL',
+  'URBANIZACION SAN ROMAN',
+]);
 
 export const obtenerConfigHorarioProyecto = (proyectoRaw: string): ConfigHorarioProyecto => {
-  const p = String(proyectoRaw || '').trim().toUpperCase();
+  const proy = String(proyectoRaw || '').trim().toUpperCase();
 
-  // 1. Proyectos con rotación 48X48 (fin de semana alterno V-S-D) y SIN Líder de Proyecto
-  if (
-    p.includes('EDEN PARK') ||
-    p.includes('MONTERREY') ||
-    p.includes('QUINZANDAL') ||
-    p.includes('QUIZANDAL') ||
-    p.includes('IMPAL')
-  ) {
+  if (PROYECTOS_COMBINADO_MIXTO_DIURNO.has(proy)) {
     return {
-      tieneLider: false,
-      turnosPermitidos: ['48X48'],
-    };
-  }
-
-  // 2. Proyectos combinados (Líder + Oficiales Mixtos + Oficiales Diurnos)
-  if (
-    p.includes('CENTRO PLAZA') ||
-    p.includes('CONCRESA') ||
-    p.includes('CHACAITO') ||
-    p.includes('BARUTA') ||
-    p.includes('LA GRANJA') ||
-    p.includes('TRINIDAD') ||
-    p.includes('ASOPRASUR')
-  ) {
-    return {
-      tieneLider: true,
       turnosPermitidos: ['MIXTO', 'DIURNO'],
+      tieneLider: true,
       esCombinado: true,
     };
   }
 
-  // 3. Trinitarias: Solo Diurno y Nocturno (con Líder)
-  if (p.includes('TRINITARIAS')) {
+  if (PROYECTOS_DIURNO_NOCTURNO.has(proy)) {
     return {
-      tieneLider: true,
       turnosPermitidos: ['DIURNO', 'NOCTURNO'],
-    };
-  }
-
-  // 4. Entidades Bancarias: Solo Diurno (con Líder)
-  if (p.includes('BANCARIA') || p.includes('BANCO')) {
-    return {
       tieneLider: true,
-      turnosPermitidos: ['DIURNO'],
+      esCombinado: false,
     };
   }
 
-  // 5. Resto de proyectos estándar
+  if (
+    PROYECTOS_SOLO_DIURNO.has(proy) ||
+    proy.includes('BANCO') ||
+    proy.includes('ENTIDAD BANCARIA')
+  ) {
+    return {
+      turnosPermitidos: ['DIURNO'],
+      tieneLider: true,
+      esCombinado: false,
+    };
+  }
+
+  if (PROYECTOS_48X48_SIN_LIDER.has(proy)) {
+    return {
+      turnosPermitidos: ['48X48'],
+      tieneLider: false,
+      esCombinado: false,
+    };
+  }
+
+  if (PROYECTOS_24X24.has(proy)) {
+    return {
+      turnosPermitidos: ['24X24'],
+      tieneLider: true,
+      esCombinado: false,
+    };
+  }
+
+  // TODOS los demás proyectos trabajan ÚNICAMENTE con personal MIXTO y Líder de Proyecto
   return {
+    turnosPermitidos: ['MIXTO'],
     tieneLider: true,
-    turnosPermitidos: ['MIXTO', '24X24', 'DIURNO', 'NOCTURNO'],
+    esCombinado: false,
   };
 };
-
-export const TITULOS_NOVEDAD = [
-  "Recorrido general",
-  "Objeto extraviado / recuperado",
-  "Entrega / Recepción de guardia",
-  "Novedad en control de acceso",
-  "Vehículo sospechoso / mal estacionado",
-  "Visita de supervisión / auditoría",
-  "Consigna especial / protocolo",
-  "Hurto",
-  "Robo",
-  "Sospechoso",
-  "Procedimiento Policial",
-  "Procedimiento de otras autoridades",
-  "Daño a las instalaciones",
-  "Daños a terceros",
-  "Presencia de pedigüeños / Venta ambulante",
-  "Colisión / Choque vehicular",
-  "Atropello",
-  "Emergencia médica de empleados",
-  "Emergencia médica de terceros (visitantes/clientes)",
-  "Falla del sistema de seguridad (CCTV/Alarmas)",
-  "Fuga de fluidos (Agua/Gas)",
-  "Fallo de energía",
-  "Conato de incendio",
-  "OTRA:",
-];
