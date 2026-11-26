@@ -1,53 +1,52 @@
 export const PROYECTOS: string[] = [
-  'ACADEMIA WASHINGTON',
-  'ASOPRASUR',
-  'BANCO DE VENEZUELA SEDE PRINCIPAL',
-  'BARUTA',
-  'CAMPO CLARO',
-  'CARONOCO',
-  'CCCT',
-  'CENTRO PLAZA',
-  'CHACAITO',
-  'COMERCIO CCCT',
-  'CONCRESA',
-  'DUNCAN LA CALIFORNIA',
-  'ESTACIONAMIENTO CCCT',
-  'GALP 02 Y 03 VALENCIA',
-  'GALP 110',
-  'GALP IMPAL',
-  'GALP MONTERREY',
-  'GALPS IND IMPAL',
-  'GALPS IND MONTERREY',
-  'GALPS. INDUSTRIAL',
-  'GALPS. MARACAY',
-  'INCAMETAL',
-  'LA CALIFORNIA',
-  'LA GRANJA',
-  'LAB. GALP 141 Y 142',
-  'LAB. GALP 34',
-  'MULTICENTRO EMPRESARIAL DEL ESTE',
-  'OFICINA PRINCIPAL',
-  'PRADOS DEL ESTE',
-  'RESID. EDEN PARK',
-  'RESID. QUINZANDAL',
-  'RESID. VISTA REAL',
-  'SEDE PRINCIPAL',
-  'SUELOPETROL',
-  'TORRE BRITANICA',
-  'TRINIDAD',
-  'TRINITARIAS',
-  'URBANIZACION SAN ROMAN',
-  'VALENCIA',
-  'YARIBU',
+  "ESTACIONAMIENTO CCCT",
+  "COMERCIO CCCT",
+  "NIKEL 3",
+  "SECTOR YAREY",
+  "HOTEL CCT",
+  "CENTRO JOYERO",
+  "EXPRESO CHACAITO",
+  "EXPRESO BARUTA",
+  "EXPRESO LA TRINIDAD",
+  "GALERIA SEBUCAN",
+  "CC GALERIA PRADO DEL ESTE",
+  "CC UNICO",
+  "CC VIZCAYA",
+  "CC CONCRESA",
+  "CENTRO PLAZA",
+  "ACADEMIA WASHINGTON",
+  "CC CASCADA CARRIZAL",
+  "CECOM CASCADA CARRIZAL",
+  "CC CASCADA MATURIN",
+  "HOTEL CASCADA MATURIN",
+  "GOKARTS",
+  "DUNCAN LOS RUICES",
+  "DUNCAN LA CALIFORNIA",
+  "LA GRANJA",
+  "CC LAS TRINITARIAS",
+  "HOTEL TRINITARIAS SUITS",
+  "RESIDENCIA ASOPRASUR",
+  "RESIDENCIA ESCAMPADERO",
+  "RESID. LA HACIENDA",
+  "RESID. VILLA SALVA III",
+  "RESID. QUINZANDAL",
+  "RESID. ESPOSALLE",
+  "RESID. EDEN PARK",
+  "RESID. ASONAPOLEON",
+  "RESID. YARIBU",
+  "COUNTRY",
+  "GALPS IND MONTERREY",
+  "GALPS IND IMPAL",
+  "ENTIDADES BANCARIAS",
+  "FUERZA AEREA MARACAY",
+  "RESIDENCIAS PARAISO LOS CHORROS",
 ];
 
 export const PROYECTOS_EXCLUIDOS: string[] = [
-  'HIERROBECO',
-  'GALP HIERROBECO BQTO',
-  'TERRENO LA ONZA',
-  'TERRENOS LA ONZA',
-  'TERRENO ARAUCA',
-  'TERRENOS ARAUCA',
+  "HIERROBECO",
+  "GALP HIERROBECO BQTO",
+  "TERRENO LA ONZA",
+  "TERRENO ARAUCA",
 ];
 
 export type HorarioPermitido = 'MIXTO' | '24X24' | '48X48' | 'DIURNO' | 'NOCTURNO';
@@ -59,45 +58,46 @@ export interface ConfigHorarioProyecto {
 }
 
 const PROYECTOS_COMBINADO_MIXTO_DIURNO = new Set([
-  'CENTRO PLAZA',
-  'CONCRESA',
-  'CHACAITO',
-  'BARUTA',
-  'LA GRANJA',
-  'TRINIDAD',
-  'ASOPRASUR',
-  'ASOPROSUR',
+  "CENTRO JOYERO",
+  "EXPRESO CHACAITO",
+  "EXPRESO BARUTA",
+  "EXPRESO LA TRINIDAD",
+  "CC CONCRESA",
+  "CENTRO PLAZA",
+  "RESIDENCIA ASOPRASUR",
+  "LA GRANJA",
 ]);
 
 const PROYECTOS_DIURNO_NOCTURNO = new Set([
-  'TRINITARIAS',
+  "CC LAS TRINITARIAS",
+  "HOTEL TRINITARIAS SUITS",
 ]);
 
 const PROYECTOS_SOLO_DIURNO = new Set([
-  'BANCO DE VENEZUELA SEDE PRINCIPAL',
-  'ENTIDADES BANCARIAS',
-  'BANCO DE VENEZUELA',
-  'BANCO MERCANTIL',
-  'BANCO PROVINCIAL',
-  'BANESCO',
-  'BNC',
-  'BANCARIBE',
-  'BANCO DEL TESORO',
-  'BANCO BICENTENARIO',
+  "ENTIDADES BANCARIAS",
 ]);
 
 const PROYECTOS_48X48_SIN_LIDER = new Set([
-  'RESID. EDEN PARK',
-  'GALPS IND MONTERREY',
-  'GALP MONTERREY',
-  'RESID. QUINZANDAL',
-  'GALPS IND IMPAL',
-  'GALP IMPAL',
+  "GALPS IND MONTERREY",
+  "GALPS IND IMPAL",
+  "RESID. QUINZANDAL",
+  "RESID. EDEN PARK",
 ]);
 
-const PROYECTOS_24X24 = new Set([
-  'RESID. VISTA REAL',
-  'URBANIZACION SAN ROMAN',
+const PROYECTOS_MIXTO_SIN_LIDER = new Set([
+  "SECTOR YAREY",
+  "CC VIZCAYA",
+  "CECOM CASCADA CARRIZAL",
+  "HOTEL CASCADA MATURIN",
+  "RESID. VILLA SALVA III",
+  "RESID. ESPOSALLE",
+  "RESID. ASONAPOLEON",
+  "COUNTRY",
+  "FUERZA AEREA MARACAY",
+]);
+
+const PROYECTOS_NOCTURNO_SIN_LIDER = new Set([
+  "RESID. YARIBU",
 ]);
 export const obtenerConfigHorarioProyecto = (proyectoRaw: string): ConfigHorarioProyecto => {
   const proy = String(proyectoRaw || '').trim().toUpperCase();
@@ -118,11 +118,7 @@ export const obtenerConfigHorarioProyecto = (proyectoRaw: string): ConfigHorario
     };
   }
 
-  if (
-    PROYECTOS_SOLO_DIURNO.has(proy) ||
-    proy.includes('BANCO') ||
-    proy.includes('ENTIDAD BANCARIA')
-  ) {
+  if (PROYECTOS_SOLO_DIURNO.has(proy)) {
     return {
       turnosPermitidos: ['DIURNO'],
       tieneLider: true,
@@ -138,14 +134,23 @@ export const obtenerConfigHorarioProyecto = (proyectoRaw: string): ConfigHorario
     };
   }
 
-  if (PROYECTOS_24X24.has(proy)) {
+  if (PROYECTOS_MIXTO_SIN_LIDER.has(proy)) {
     return {
-      turnosPermitidos: ['24X24'],
-      tieneLider: true,
+      turnosPermitidos: ['MIXTO'],
+      tieneLider: false,
       esCombinado: false,
     };
   }
 
+  if (PROYECTOS_NOCTURNO_SIN_LIDER.has(proy)) {
+    return {
+      turnosPermitidos: ['NOCTURNO'],
+      tieneLider: false,
+      esCombinado: false,
+    };
+  }
+
+  // Todos los demás proyectos trabajan ÚNICAMENTE con personal MIXTO y Líder de Proyecto
   return {
     turnosPermitidos: ['MIXTO'],
     tieneLider: true,
@@ -154,13 +159,27 @@ export const obtenerConfigHorarioProyecto = (proyectoRaw: string): ConfigHorario
 };
 
 export const TITULOS_NOVEDAD: string[] = [
-  'NOVEDAD EN EL SERVICIO',
-  'INFORME DE INCIDENCIA OPERATIVA',
-  'REPORTE DE SUPERVISIÓN Y CONTROL',
-  'REPORTE DE FALLA DE INFRAESTRUCTURA / SERVICIOS',
-  'NOVEDAD CON PERSONAL / ASISTENCIA',
-  'ENTREGA Y RECEPCIÓN DE GUARDIA',
-  'HURTO O ROBO DETECTADO',
-  'ACCIDENTE O EMERGENCIA MÉDICA',
-  'OTRA:',
+  "Recorrido general",
+  "Objeto extraviado / recuperado",
+  "Entrega / Recepción de guardia",
+  "Novedad en control de acceso",
+  "Vehículo sospechoso / mal estacionado",
+  "Visita de supervisión / auditoría",
+  "Hurto",
+  "Robo",
+  "Sospechoso",
+  "Procedimiento Policial",
+  "Procedimiento de otras autoridades",
+  "Daño a las instalaciones",
+  "Daños a terceros",
+  "Presencia de pedigüeños / Venta ambulante",
+  "Colisión / Choque vehicular",
+  "Atropello",
+  "Emergencia médica de empleados",
+  "Emergencia médica de terceros (visitantes/clientes)",
+  "Falla del sistema de seguridad (CCTV/Alarmas)",
+  "Fuga de fluidos (Agua/Gas)",
+  "Fallo de energía",
+  "Conato de incendio",
+  "OTRA:",
 ];
