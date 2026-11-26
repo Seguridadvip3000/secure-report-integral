@@ -41,7 +41,6 @@ export const PROYECTOS: string[] = [
   'YARIBU',
 ];
 
-// Proyectos eliminados definitivamente de los listados
 export const PROYECTOS_EXCLUIDOS: string[] = [
   'HIERROBECO',
   'GALP HIERROBECO BQTO',
@@ -59,7 +58,6 @@ export interface ConfigHorarioProyecto {
   esCombinado: boolean;
 }
 
-// 1. Proyectos con MIXTO + DIURNO
 const PROYECTOS_COMBINADO_MIXTO_DIURNO = new Set([
   'CENTRO PLAZA',
   'CONCRESA',
@@ -71,12 +69,10 @@ const PROYECTOS_COMBINADO_MIXTO_DIURNO = new Set([
   'ASOPROSUR',
 ]);
 
-// 2. Proyectos con DIURNO y NOCTURNO (sin Mixto)
 const PROYECTOS_DIURNO_NOCTURNO = new Set([
   'TRINITARIAS',
 ]);
 
-// 3. Proyectos SOLO DIURNO (Entidades Bancarias)
 const PROYECTOS_SOLO_DIURNO = new Set([
   'BANCO DE VENEZUELA SEDE PRINCIPAL',
   'ENTIDADES BANCARIAS',
@@ -90,7 +86,6 @@ const PROYECTOS_SOLO_DIURNO = new Set([
   'BANCO BICENTENARIO',
 ]);
 
-// 4. Proyectos 48x48 con fin de semana alterno (V-S-D) y SIN Líder
 const PROYECTOS_48X48_SIN_LIDER = new Set([
   'RESID. EDEN PARK',
   'GALPS IND MONTERREY',
@@ -100,12 +95,10 @@ const PROYECTOS_48X48_SIN_LIDER = new Set([
   'GALP IMPAL',
 ]);
 
-// 5. Proyectos 24x24
 const PROYECTOS_24X24 = new Set([
   'RESID. VISTA REAL',
   'URBANIZACION SAN ROMAN',
 ]);
-
 export const obtenerConfigHorarioProyecto = (proyectoRaw: string): ConfigHorarioProyecto => {
   const proy = String(proyectoRaw || '').trim().toUpperCase();
 
@@ -153,10 +146,21 @@ export const obtenerConfigHorarioProyecto = (proyectoRaw: string): ConfigHorario
     };
   }
 
-  // TODOS los demás proyectos trabajan ÚNICAMENTE con personal MIXTO y Líder de Proyecto
   return {
     turnosPermitidos: ['MIXTO'],
     tieneLider: true,
     esCombinado: false,
   };
 };
+
+export const TITULOS_NOVEDAD: string[] = [
+  'NOVEDAD EN EL SERVICIO',
+  'INFORME DE INCIDENCIA OPERATIVA',
+  'REPORTE DE SUPERVISIÓN Y CONTROL',
+  'REPORTE DE FALLA DE INFRAESTRUCTURA / SERVICIOS',
+  'NOVEDAD CON PERSONAL / ASISTENCIA',
+  'ENTREGA Y RECEPCIÓN DE GUARDIA',
+  'HURTO O ROBO DETECTADO',
+  'ACCIDENTE O EMERGENCIA MÉDICA',
+  'OTRA:',
+];
