@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { PROYECTOS } from '../data/constants';
+import {
+  PROYECTOS,
+  PROYECTOS_EXCLUIDOS,
+  obtenerConfigHorarioProyecto,
+} from '../data/constants';
 import {
   generarPDFAsistenciaDiaria,
   generarPDFInformeDiarioDirectiva,
@@ -28,18 +32,6 @@ import {
 } from 'lucide-react';
 
 const PROYECTOS_CON_JEFE_OP = ['ESTACIONAMIENTO CCCT', 'COMERCIO CCCT'];
-const PROYECTOS_CON_DIURNO = [
-  'CHACAITO',
-  'BARUTA',
-  'TRINIDAD',
-  'CENTRO PLAZA',
-  'CONCRESA',
-  'TRINITARIAS',
-  'LA GRANJA',
-  'ASOPROSUR',
-  'ASOPRSUR',
-];
-const PROYECTOS_CON_NOCTURNO = ['YARIBU', 'DUNCAN LA CALIFORNIA'];
 
 const ESTATUS_ASISTENTES = [
   'PRESENTE',
@@ -78,8 +70,8 @@ export default function AnalistaHome() {
 
   const [proyectoPlantilla, setProyectoPlantilla] = useState<string>('');
   const [plantillaProyectoList, setPlantillaProyectoList] = useState<any[]>([]);
-  const [filtroHorarioPlantilla, setFiltroHorarioPlantilla] = useState<'MIXTO' | '24X24' | 'DIURNO_NOCTURNO'>('MIXTO');
-  const [grupoDesplegadoAnalista, setGrupoDesplegadoAnalista] = useState<'A' | 'B' | 'C'>('B');
+  const [filtroHorarioPlantilla, setFiltroHorarioPlantilla] = useState<string>('MIXTO');
+  const [grupoDesplegadoAnalista, setGrupoDesplegadoAnalista] = useState<'A' | 'B' | 'C'>('A');
   const [oficialEditandoFechaTab, setOficialEditandoFechaTab] = useState<any | null>(null);
   const [fechaIngresoTabInput, setFechaIngresoTabInput] = useState<string>(hoyLocal);
   const [cargandoPlantilla, setCargandoPlantilla] = useState(false);
@@ -108,25 +100,33 @@ export default function AnalistaHome() {
   } | null>(null);
 
   const [mensajeGlobal, setMensajeGlobal] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
+
   useEffect(() => {
     const cargarProyectos = async () => {
-      const setProy = new Set<string>(Array.isArray(PROYECTOS) ? PROYECTOS : []);
-      const { data } = await supabase.from('projects').select('*');
-      if (Array.isArray(data)) {
-        data.forEach((p: any) => {
-          const val = p?.nombre || p?.name || p?.proyecto;
-          if (val) setProy.add(String(val).trim());
+      const setProy = new Set<string>(
+        (Array.isArray(PROYECTOS) ? PROYECTOS : []).filter(
+          (p) => !PROYECTOS_EXCLUIDOS.includes(p.trim().toUpperCase())
+        )
+      );
+      const { data: plantillaProys } = await supabase.from('plantilla_proyectos').select('proyecto');
+      if (Array.isArray(plantillaProys)) {
+        plantillaProys.forEach((p: any) => {
+          const val = String(p?.proyecto || '').trim();
+          if (val && !PROYECTOS_EXCLUIDOS.includes(val.toUpperCase())) {
+            setProy.add(val);
+          }
         });
       }
       const ordenados = Array.from(setProy).sort();
       setListaProyectos(ordenados);
       if (ordenados.length > 0 && !proyectoPlantilla) {
-        setProyectoPlantilla(ordenados.at(0) || '');
+        const primero = ordenados.at(0) || '';
+        setProyectoPlantilla(primero);
+        setFiltroHorarioPlantilla(obtenerConfigHorarioProyecto(primero).turnosPermitidos.at(0) || 'MIXTO');
       }
     };
     cargarProyectos();
   }, []);
-
   const verificarLiderPorQR = async (proyecto: string, fechaRef: string) => {
     if (!proyecto || proyecto === 'TODOS') {
       setLiderActivoPorQR(false);
@@ -233,6 +233,12 @@ export default function AnalistaHome() {
 
   useEffect(() => {
     if (pestana === 'PLANTILLA_PROYECTO' && proyectoPlantilla) {
+      const cfg = obtenerConfigHorarioProyecto(proyectoPlantilla);
+      const primero = cfg.turnosPermitidos.at(0) || 'MIXTO';
+      setFiltroHorarioPlantilla(primero);
+      if ((primero === '24X24' || primero === '48X48') && grupoDesplegadoAnalista === 'C') {
+        setGrupoDesplegadoAnalista('A');
+      }
       consultarPlantillaProyecto(proyectoPlantilla);
     }
   }, [proyectoPlantilla, pestana]);
@@ -557,14 +563,20 @@ export default function AnalistaHome() {
   ).length;
 
   const proyUpper = proyectoFiltro.toUpperCase();
+  const configFiltro = obtenerConfigHorarioProyecto(proyectoFiltro);
   const asistentesProyecto = asistenciasProyecto.filter((a) =>
     ESTATUS_ASISTENTES.includes(String(a.estatus || '').toUpperCase())
   );
   const tieneJefeOp = PROYECTOS_CON_JEFE_OP.includes(proyUpper);
-  const tieneDiurno = PROYECTOS_CON_DIURNO.includes(proyUpper);
-  const tieneNocturno = PROYECTOS_CON_NOCTURNO.includes(proyUpper);
+  const tieneLiderProy = configFiltro.tieneLider;
+  const tieneMixtoProy =
+    configFiltro.turnosPermitidos.includes('MIXTO') ||
+    configFiltro.turnosPermitidos.includes('24X24');
+  const tiene48x48Proy = configFiltro.turnosPermitidos.includes('48X48');
+  const tieneDiurno = configFiltro.turnosPermitidos.includes('DIURNO');
+  const tieneNocturno = configFiltro.turnosPermitidos.includes('NOCTURNO');
 
-  const countLider = liderActivoPorQR ? 1 : 0;
+  const countLider = tieneLiderProy && liderActivoPorQR ? 1 : 0;
   const countJefeOp = tieneJefeOp
     ? asistentesProyecto.filter((a) => String(a.cargo || '').toUpperCase() === 'J. OPERACIONES').length
     : 0;
@@ -573,6 +585,11 @@ export default function AnalistaHome() {
       String(a.cargo || '').toUpperCase() !== 'LIDER' &&
       String(a.cargo || '').toUpperCase() !== 'J. OPERACIONES' &&
       ['MIXTO', '24X24'].includes(String(a.turno || 'MIXTO').toUpperCase())
+  ).length;
+  const countOficiales48x48 = asistentesProyecto.filter(
+    (a) =>
+      String(a.cargo || '').toUpperCase() !== 'LIDER' &&
+      String(a.turno || '').toUpperCase() === '48X48'
   ).length;
   const countOficialesDiurnos = asistentesProyecto.filter(
     (a) =>
@@ -587,7 +604,12 @@ export default function AnalistaHome() {
       String(a.turno || '').toUpperCase() === 'NOCTURNO'
   ).length;
   const totalCuadroEjecutivo =
-    countLider + countJefeOp + countOficialesMixtos + countOficialesDiurnos + countOficialesNocturnos;
+    countLider +
+    countJefeOp +
+    countOficialesMixtos +
+    countOficiales48x48 +
+    countOficialesDiurnos +
+    countOficialesNocturnos;
   const pad2 = (n: number) => String(n).padStart(2, '0');
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
@@ -714,12 +736,12 @@ export default function AnalistaHome() {
                   <option value="TODOS">TODOS LOS HORARIOS</option>
                   <option value="MIXTO">MIXTO</option>
                   <option value="24X24">24X24</option>
+                  <option value="48X48">48X48</option>
                   <option value="DIURNO">DIURNO</option>
                   <option value="NOCTURNO">NOCTURNO</option>
                 </select>
               </div>
             </div>
-
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
               {proyectoFiltro !== 'TODOS' && fechaDesdeAsist === fechaHastaAsist && (
                 diaCerradoActual ? (
@@ -731,11 +753,6 @@ export default function AnalistaHome() {
                     type="button"
                     disabled={cerrandoDia || fechaDesdeAsist >= hoyLocal}
                     onClick={manejarCerrarAsistenciaDia}
-                    title={
-                      fechaDesdeAsist >= hoyLocal
-                        ? 'Solo se puede cerrar a partir del día siguiente (24h cumplidas)'
-                        : 'Cerrar asistencia del día y plasmar en Rol de Guardia'
-                    }
                     className="px-4 py-2.5 rounded-xl text-xs font-black bg-amber-600 text-white hover:bg-amber-700 flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Lock size={14} />
@@ -796,6 +813,7 @@ export default function AnalistaHome() {
               )}
             </div>
           </div>
+
           {proyectoFiltro !== 'TODOS' && (
             <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
               <div className="flex items-center justify-between border-b border-slate-700 pb-2">
@@ -808,10 +826,12 @@ export default function AnalistaHome() {
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
-                <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                  <div className="text-slate-400 font-bold uppercase">Líder de Proyecto</div>
-                  <div className="text-xl font-black text-white mt-0.5">{pad2(countLider)}</div>
-                </div>
+                {tieneLiderProy && (
+                  <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                    <div className="text-slate-400 font-bold uppercase">Líder de Proyecto</div>
+                    <div className="text-xl font-black text-white mt-0.5">{pad2(countLider)}</div>
+                  </div>
+                )}
 
                 {tieneJefeOp && (
                   <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
@@ -820,10 +840,19 @@ export default function AnalistaHome() {
                   </div>
                 )}
 
-                <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                  <div className="text-slate-400 font-bold uppercase">Oficiales Mixtos</div>
-                  <div className="text-xl font-black text-blue-300 mt-0.5">{pad2(countOficialesMixtos)}</div>
-                </div>
+                {(tieneMixtoProy || countOficialesMixtos > 0) && (
+                  <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                    <div className="text-slate-400 font-bold uppercase">Oficiales Mixtos</div>
+                    <div className="text-xl font-black text-blue-300 mt-0.5">{pad2(countOficialesMixtos)}</div>
+                  </div>
+                )}
+
+                {(tiene48x48Proy || countOficiales48x48 > 0) && (
+                  <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                    <div className="text-slate-400 font-bold uppercase">Oficiales 48X48</div>
+                    <div className="text-xl font-black text-cyan-300 mt-0.5">{pad2(countOficiales48x48)}</div>
+                  </div>
+                )}
 
                 {(tieneDiurno || countOficialesDiurnos > 0) && (
                   <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
@@ -841,685 +870,3 @@ export default function AnalistaHome() {
               </div>
             </div>
           )}
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="text-xs font-bold text-emerald-600 uppercase">Presentes / Serv. Esp.</div>
-              <div className="text-2xl font-black text-slate-800 mt-1">{totalPresentes}</div>
-            </div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="text-xs font-bold text-amber-600 uppercase">Apoyos / Traslados</div>
-              <div className="text-2xl font-black text-slate-800 mt-1">{totalApoyos}</div>
-            </div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="text-xs font-bold text-red-600 uppercase">Faltas del Día</div>
-              <div className="text-2xl font-black text-slate-800 mt-1">{totalFaltas}</div>
-            </div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="text-xs font-bold text-slate-500 uppercase">Salud / Vac. / Novedades</div>
-              <div className="text-2xl font-black text-slate-800 mt-1">{totalOtros}</div>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-            {cargandoAsist ? (
-              <p className="text-center text-slate-500 py-8 text-sm">Consultando registros de asistencia...</p>
-            ) : listaOrdenadaAsistencia.length === 0 ? (
-              <p className="text-center text-slate-500 py-8 text-sm">
-                No hay asistencias registradas para los filtros seleccionados.
-              </p>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {listaOrdenadaAsistencia.map((reg) => (
-                  <div
-                    key={reg.id}
-                    className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                          {reg.fecha}
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-800">
-                          {reg.cargo || 'OFICIAL'}
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">
-                          {reg.turno === 'DIURNO' || reg.turno === 'NOCTURNO'
-                            ? reg.turno
-                            : `${reg.turno} • GRP ${reg.grupo}`}
-                        </span>
-                        <span className="text-xs font-mono bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded font-bold">
-                          Entrada: {reg.hora_entrada || '--:--'}
-                        </span>
-                        <span className="font-bold text-sm text-slate-800">{reg.nombre_completo}</span>
-                        <span className="text-xs text-slate-500">(C.I. {reg.cedula})</span>
-                      </div>
-                      <p className="text-xs text-slate-600 mt-1">
-                        Proyecto: <strong>{reg.proyecto}</strong>
-                        {reg.proyecto_apoyo ? (
-                          <>
-                            {' '}
-                            • <span className="text-amber-700 font-semibold">Destino/Origen: {reg.proyecto_apoyo}</span>
-                          </>
-                        ) : null}
-                        {reg.observacion ? ` • Obs: ${reg.observacion}` : ''}
-                      </p>
-                      {reg.modificado_por && (
-                        <p className="text-[11px] text-amber-800 font-semibold mt-0.5">
-                          ✏️ Modificado por {reg.modificado_por} el{' '}
-                          {new Date(reg.modificado_at).toLocaleString('es-VE', { timeZone: 'America/Caracas' })} —
-                          Justificación: {reg.justificacion_modificacion}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 self-start md:self-center">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          ESTATUS_ASISTENTES.includes(reg.estatus)
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : reg.estatus.includes('APOYO') || reg.estatus.includes('SERVICIO ESPECIAL')
-                            ? 'bg-amber-100 text-amber-800'
-                            : reg.estatus === 'FALTA INJUSTIFICADA' || reg.estatus === 'BAJA POR SALUD'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {reg.estatus}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => abrirModalEdicion(reg)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 flex items-center gap-1 cursor-pointer"
-                      >
-                        <Edit3 size={13} /> Modificar Asistencia
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {auditoriaDia.length > 0 && (
-            <div className="bg-amber-50/60 p-5 rounded-2xl border border-amber-200 space-y-2">
-              <h3 className="text-xs font-bold text-amber-900 uppercase flex items-center gap-1.5">
-                <History size={15} /> Bitácora de Modificaciones de Asistencia ({auditoriaDia.length})
-              </h3>
-              <div className="divide-y divide-amber-200/60">
-                {auditoriaDia.map((aud) => (
-                  <div key={aud.id} className="py-2 text-xs text-slate-700">
-                    <strong>
-                      [{new Date(aud.created_at).toLocaleString('es-VE', { timeZone: 'America/Caracas' })}]
-                    </strong>{' '}
-                    <strong>{aud.modificado_por}</strong> modificó a <strong>{aud.nombre_completo}</strong> ({aud.cedula}):{' '}
-                    <span className="line-through text-red-700">{aud.estatus_anterior}</span> →{' '}
-                    <span className="font-bold text-emerald-700">{aud.estatus_nuevo}</span>.{' '}
-                    <span className="text-amber-900 font-semibold">Justificación: {aud.justificacion}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      {pestana === 'PLANTILLA_PROYECTO' && (
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-            <div>
-              <h2 className="text-base font-bold text-slate-800">
-                Plantilla Activa por Proyecto ({plantillaProyectoList.length})
-              </h2>
-              <p className="text-xs text-slate-500">
-                Despliegue cada horario y grupo (A / B / C) para verificar personal y editar fechas de ingreso.
-              </p>
-            </div>
-
-            <div className="w-full sm:w-72">
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Proyecto *</label>
-              <select
-                value={proyectoPlantilla}
-                onChange={(e) => setProyectoPlantilla(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold bg-slate-50"
-              >
-                {listaProyectos.map((proy) => (
-                  <option key={proy} value={proy}>
-                    {proy}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {(['MIXTO', '24X24', 'DIURNO_NOCTURNO'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => {
-                  setFiltroHorarioPlantilla(tab);
-                  if (tab === '24X24' && grupoDesplegadoAnalista === 'C') {
-                    setGrupoDesplegadoAnalista('A');
-                  }
-                }}
-                className={`px-4 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
-                  filtroHorarioPlantilla === tab
-                    ? 'bg-teal-600 text-white border-teal-600'
-                    : 'bg-slate-50 text-slate-700 border-slate-200'
-                }`}
-              >
-                {tab === 'MIXTO' ? 'MIXTO' : tab === '24X24' ? '24X24' : 'DIURNO / NOCTURNO'}
-              </button>
-            ))}
-          </div>
-
-          {filtroHorarioPlantilla !== 'DIURNO_NOCTURNO' && (
-            <div className="flex flex-wrap gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <span className="text-xs font-bold text-slate-500 self-center mr-1">Grupo:</span>
-              {(filtroHorarioPlantilla === 'MIXTO' ? (['A', 'B', 'C'] as const) : (['A', 'B'] as const)).map(
-                (grp) => (
-                  <button
-                    key={grp}
-                    type="button"
-                    onClick={() => setGrupoDesplegadoAnalista(grp)}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-black cursor-pointer ${
-                      grupoDesplegadoAnalista === grp
-                        ? 'bg-slate-900 text-white'
-                        : 'bg-white text-slate-700 border border-slate-300'
-                    }`}
-                  >
-                    GRUPO {grp}
-                  </button>
-                )
-              )}
-            </div>
-          )}
-
-          {cargandoPlantilla ? (
-            <p className="text-center text-slate-500 py-8 text-sm">Cargando plantilla del proyecto...</p>
-          ) : (
-            (() => {
-              const filtrados = plantillaProyectoList.filter((item) => {
-                const trn = String(item.turno || 'MIXTO').toUpperCase();
-                const grp = String(item.grupo || 'A').toUpperCase();
-                if (filtroHorarioPlantilla === 'MIXTO') {
-                  return trn === 'MIXTO' && grp === grupoDesplegadoAnalista;
-                }
-                if (filtroHorarioPlantilla === '24X24') {
-                  return trn === '24X24' && grp === grupoDesplegadoAnalista;
-                }
-                return trn === 'DIURNO' || trn === 'NOCTURNO';
-              });
-
-              return filtrados.length === 0 ? (
-                <p className="text-center text-slate-400 py-6 text-xs">
-                  No hay personal registrado en este bloque.
-                </p>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {filtrados.map((of) => (
-                    <div key={of.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-2 py-0.5 rounded text-xs font-black bg-teal-100 text-teal-800">
-                            {of.cargo || 'OFICIAL'}
-                          </span>
-                          <span className="font-bold text-sm text-slate-800">
-                            {of.apellidos}, {of.nombres}
-                          </span>
-                          <span className="text-xs font-mono text-slate-500">C.I. {of.cedula}</span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          Fecha de Ingreso:{' '}
-                          {of.fecha_ingreso ? (
-                            <strong>{new Date(of.fecha_ingreso).toLocaleDateString('es-VE')}</strong>
-                          ) : (
-                            <span className="text-amber-700 font-bold">Sin fecha registrada</span>
-                          )}
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOficialEditandoFechaTab(of);
-                          setFechaIngresoTabInput(
-                            of.fecha_ingreso
-                              ? new Date(of.fecha_ingreso).toLocaleDateString('en-CA')
-                              : hoyLocal
-                          );
-                        }}
-                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 self-start sm:self-center cursor-pointer"
-                      >
-                        Editar Fecha de Ingreso
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()
-          )}
-        </div>
-      )}
-      {pestana === 'HISTORIAL_CEDULA' && (
-        <div className="space-y-5">
-          <form
-            onSubmit={consultarExpedientePorCedula}
-            className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Cédula de Identidad del Oficial *
-                </label>
-                <div className="relative">
-                  <Search size={18} className="absolute left-3.5 top-3 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    value={cedulaBusqueda}
-                    onChange={(e) => setCedulaBusqueda(e.target.value)}
-                    placeholder="Ej: V-20123456 o 20123456"
-                    className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Período Desde</label>
-                <input
-                  type="date"
-                  value={fechaDesdeCedula}
-                  onChange={(e) => setFechaDesdeCedula(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Período Hasta</label>
-                <input
-                  type="date"
-                  value={fechaHastaCedula}
-                  onChange={(e) => setFechaHastaCedula(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setFechaDesdeCedula('');
-                  setFechaHastaCedula('');
-                }}
-                className="text-xs text-slate-500 underline cursor-pointer"
-              >
-                Limpiar filtro de fechas (Ver todo desde su ingreso)
-              </button>
-
-              <button
-                type="submit"
-                disabled={buscandoCedula}
-                className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 shadow-sm cursor-pointer disabled:opacity-50"
-              >
-                {buscandoCedula ? 'Consultando...' : 'Consultar Historial por Cédula'}
-              </button>
-            </div>
-          </form>
-
-          {errorBusqueda && (
-            <div className="p-4 rounded-xl text-sm border bg-red-50 border-red-200 text-red-800 flex items-center gap-2">
-              <AlertCircle size={18} />
-              <span>{errorBusqueda}</span>
-            </div>
-          )}
-          {resultadoCedula && (
-            <div className="space-y-5">
-              <div className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-teal-600 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <span className="text-xs font-bold text-teal-600 uppercase">Expediente Individual</span>
-                    <h2 className="text-xl font-bold text-slate-800">{resultadoCedula.nombreCompleto}</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Cédula: <strong>{resultadoCedula.cedula}</strong>
-                      {resultadoCedula.fichaActual && (
-                        <>
-                          {' '}
-                          • Cargo: <strong>{resultadoCedula.fichaActual.cargo || 'OFICIAL'}</strong> • Proyecto:{' '}
-                          <strong>{resultadoCedula.fichaActual.proyecto}</strong> • Grupo{' '}
-                          <strong>{resultadoCedula.fichaActual.grupo}</strong> • Horario{' '}
-                          <strong>{resultadoCedula.fichaActual.turno || 'MIXTO'}</strong>
-                        </>
-                      )}
-                    </p>
-                    {resultadoCedula.fichaActual && (
-                      <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                        <span className="text-xs text-slate-600">
-                          Fecha de Ingreso:{' '}
-                          {resultadoCedula.fichaActual.fecha_ingreso ? (
-                            <strong>
-                              {new Date(resultadoCedula.fichaActual.fecha_ingreso).toLocaleDateString('es-VE')}
-                            </strong>
-                          ) : (
-                            <span className="text-amber-700 font-bold">Sin fecha registrada</span>
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFechaIngresoAnalistaInput(
-                              resultadoCedula.fichaActual.fecha_ingreso
-                                ? new Date(resultadoCedula.fichaActual.fecha_ingreso).toLocaleDateString('en-CA')
-                                : hoyLocal
-                            );
-                            setEditandoFechaIngresoAnalista(!editandoFechaIngresoAnalista);
-                          }}
-                          className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 cursor-pointer"
-                        >
-                          Editar Fecha de Ingreso
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {resultadoCedula.fichaActual && (
-                    <span
-                      className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase self-start ${
-                        resultadoCedula.fichaActual.estado === 'ACTIVO'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      ESTATUS: {resultadoCedula.fichaActual.estado}
-                    </span>
-                  )}
-                </div>
-
-                {editandoFechaIngresoAnalista && resultadoCedula.fichaActual && (
-                  <form
-                    onSubmit={guardarFechaIngresoPorAnalista}
-                    className="bg-blue-50/60 p-3.5 rounded-xl border border-blue-200 flex flex-wrap items-center gap-3"
-                  >
-                    <label className="text-xs font-bold text-blue-900">Nueva Fecha de Ingreso:</label>
-                    <input
-                      type="date"
-                      required
-                      value={fechaIngresoAnalistaInput}
-                      onChange={(e) => setFechaIngresoAnalistaInput(e.target.value)}
-                      className="border border-blue-300 rounded-lg px-3 py-1.5 text-xs font-semibold bg-white"
-                    />
-                    <button
-                      type="submit"
-                      disabled={guardandoCambio}
-                      className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
-                    >
-                      {guardandoCambio ? 'Guardando...' : 'Guardar Fecha'}
-                    </button>
-                  </form>
-                )}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
-                  <div className="bg-slate-50 p-3 rounded-xl">
-                    <div className="text-xs font-bold text-slate-500 uppercase">Guardias Presente</div>
-                    <div className="text-xl font-black text-emerald-700">
-                      {
-                        resultadoCedula.asistencias.filter((a) =>
-                          ESTATUS_ASISTENTES.includes(a.estatus)
-                        ).length
-                      }
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 p-3 rounded-xl">
-                    <div className="text-xs font-bold text-slate-500 uppercase">Apoyos / Serv. Esp.</div>
-                    <div className="text-xl font-black text-amber-700">
-                      {
-                        resultadoCedula.asistencias.filter((a) =>
-                          [
-                            'APOYO ENVIADO',
-                            'APOYO RECIBIDO',
-                            'SERVICIO ESPECIAL RECIBIDO',
-                            'SERVICIO ESPECIAL ENVIADO',
-                          ].includes(a.estatus)
-                        ).length
-                      }
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 p-3 rounded-xl">
-                    <div className="text-xs font-bold text-slate-500 uppercase">Traslados</div>
-                    <div className="text-xl font-black text-blue-700">
-                      {
-                        resultadoCedula.movimientos.filter(
-                          (m) =>
-                            m.tipo_movimiento === 'TRASLADO ENVIADO' ||
-                            m.tipo_movimiento === 'TRASLADO RECIBIDO'
-                        ).length
-                      }
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 p-3 rounded-xl">
-                    <div className="text-xs font-bold text-slate-500 uppercase">Faltas / Salud / Vac.</div>
-                    <div className="text-xl font-black text-red-700">
-                      {
-                        resultadoCedula.asistencias.filter((a) =>
-                          ['FALTA INJUSTIFICADA', 'REPOSO MEDICO', 'BAJA POR SALUD', 'VACACIONES'].includes(
-                            a.estatus
-                          )
-                        ).length
-                      }
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
-                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
-                  <ArrowRightLeft size={18} className="text-teal-600" /> Movimientos de Plantilla (
-                  {resultadoCedula.movimientos.length})
-                </h3>
-                {resultadoCedula.movimientos.map((mov) => (
-                  <div key={mov.id} className="py-2.5 border-b border-slate-100 text-xs flex justify-between gap-2">
-                    <div>
-                      <span className="font-bold text-slate-800">{mov.tipo_movimiento}</span> ({mov.cargo || 'OFICIAL'} •{' '}
-                      {mov.turno || 'MIXTO'}) • <strong>{mov.proyecto}</strong>
-                      {mov.proyecto_relacionado ? ` ↔ ${mov.proyecto_relacionado}` : ''}
-                      {mov.observacion ? ` • ${mov.observacion}` : ''}
-                    </div>
-                    <span className="text-slate-400">{new Date(mov.created_at).toLocaleString('es-VE')}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
-                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
-                  <CheckCircle2 size={18} className="text-blue-600" /> Asistencias y Apoyos (
-                  {resultadoCedula.asistencias.length})
-                </h3>
-                {resultadoCedula.asistencias.map((asist) => (
-                  <div key={asist.id} className="py-2.5 border-b border-slate-100 text-xs flex justify-between gap-2">
-                    <div>
-                      <strong>{asist.fecha}</strong> • Entrada: <strong>{asist.hora_entrada || '--:--'}</strong> •{' '}
-                      <strong>{asist.proyecto}</strong> ({asist.cargo || 'OFICIAL'} • {asist.turno})
-                      {asist.proyecto_apoyo ? ` → ${asist.proyecto_apoyo}` : ''}
-                      {asist.observacion ? ` • ${asist.observacion}` : ''}
-                    </div>
-                    <span className="font-bold text-slate-800">{asist.estatus}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      {registroEditando && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <form
-            onSubmit={guardarModificacionAnalista}
-            className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl"
-          >
-            <h3 className="text-lg font-bold text-slate-800">Modificar Asistencia (Auditoría)</h3>
-            <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              Oficial: <strong>{registroEditando.nombre_completo}</strong> ({registroEditando.cedula})
-              <br />
-              Proyecto: <strong>{registroEditando.proyecto}</strong> • Fecha: <strong>{registroEditando.fecha}</strong>
-            </p>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Nuevo Estatus *</label>
-                <select
-                  value={nuevoEstatus}
-                  onChange={(e) => setNuevoEstatus(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold"
-                >
-                  <option value="PRESENTE">PRESENTE</option>
-                  <option value="SERVICIO ESPECIAL MIXTO">S.E MIXTO</option>
-                  <option value="SERVICIO ESPECIAL DIURNO/NOCTURNO">S.E DIURNO/NOCTURNO</option>
-                  <option value="SERVICIO ESPECIAL PROPIO">SERVICIO ESPECIAL PROPIO</option>
-                  <option value="SERVICIO ESPECIAL RECIBIDO">SERVICIO ESPECIAL RECIBIDO</option>
-                  <option value="SERVICIO ESPECIAL ENVIADO">SERVICIO ESPECIAL ENVIADO</option>
-                  <option value="APOYO RECIBIDO">APOYO RECIBIDO</option>
-                  <option value="APOYO ENVIADO">APOYO ENVIADO</option>
-                  <option value="VACACIONES">VACACIONES</option>
-                  <option value="REPOSO MEDICO">REPOSO MÉDICO</option>
-                  <option value="BAJA POR SALUD">BAJA POR SALUD</option>
-                  <option value="FALTA JUSTIFICADA">FALTA JUSTIFICADA</option>
-                  <option value="FALTA INJUSTIFICADA">FALTA INJUSTIFICADA</option>
-                  <option value="PERMISO">PERMISO</option>
-                  <option value="DESCANSO">LIBRE / DESCANSO</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Horario *</label>
-                <select
-                  value={nuevoTurno}
-                  onChange={(e) => setNuevoTurno(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold"
-                >
-                  <option value="MIXTO">MIXTO</option>
-                  <option value="24X24">24X24</option>
-                  <option value="DIURNO">DIURNO</option>
-                  <option value="NOCTURNO">NOCTURNO</option>
-                </select>
-              </div>
-            </div>
-
-            {puedeEditarHoraDirectiva && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Hora de Entrada (Solo Directiva/Admin)
-                </label>
-                <input
-                  type="text"
-                  value={nuevaHoraEntrada}
-                  onChange={(e) => setNuevaHoraEntrada(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
-                />
-              </div>
-            )}
-
-            {['APOYO ENVIADO', 'SERVICIO ESPECIAL ENVIADO', 'APOYO RECIBIDO', 'SERVICIO ESPECIAL RECIBIDO'].includes(
-              nuevoEstatus
-            ) && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Proyecto Origen / Destino *
-                </label>
-                <select
-                  required
-                  value={nuevoProyectoApoyo}
-                  onChange={(e) => setNuevoProyectoApoyo(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold"
-                >
-                  <option value="">-- Seleccione Proyecto --</option>
-                  {listaProyectos
-                    .filter((p) => p !== registroEditando.proyecto)
-                    .map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                </select>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-bold text-red-700 uppercase mb-1">
-                {nuevoEstatus === 'BAJA POR SALUD'
-                  ? 'Motivo / Diagnóstico de la Baja por Salud * (Obligatorio)'
-                  : 'Observación / Justificación de la Modificación * (Obligatoria)'}
-              </label>
-              <textarea
-                required
-                rows={3}
-                value={justificacionCambio}
-                onChange={(e) => setJustificacionCambio(e.target.value)}
-                placeholder={
-                  nuevoEstatus === 'BAJA POR SALUD'
-                    ? 'Explique obligatoriamente el porqué de la baja por salud...'
-                    : 'Explique obligatoriamente el motivo de esta corrección...'
-                }
-                className="w-full border border-red-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setRegistroEditando(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={guardandoCambio || !justificacionCambio.trim()}
-                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {guardandoCambio ? 'Guardando...' : 'Guardar Modificación'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {oficialEditandoFechaTab && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <form onSubmit={guardarFechaIngresoDesdePlantilla} className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl">
-            <h3 className="text-base font-bold text-slate-800">Editar Fecha de Ingreso</h3>
-            <p className="text-xs text-slate-600">
-              Personal: <strong>{oficialEditandoFechaTab.nombres} {oficialEditandoFechaTab.apellidos}</strong> ({oficialEditandoFechaTab.cedula})
-            </p>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Fecha de Ingreso *</label>
-              <input
-                type="date"
-                required
-                value={fechaIngresoTabInput}
-                onChange={(e) => setFechaIngresoTabInput(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setOficialEditandoFechaTab(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={guardandoCambio}
-                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 cursor-pointer"
-              >
-                {guardandoCambio ? 'Guardando...' : 'Guardar Fecha'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-    </div>
-  );
-}

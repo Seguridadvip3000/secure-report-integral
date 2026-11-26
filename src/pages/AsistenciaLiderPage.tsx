@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { PROYECTOS } from '../data/constants';
+import {
+  PROYECTOS,
+  PROYECTOS_EXCLUIDOS,
+  obtenerConfigHorarioProyecto,
+} from '../data/constants';
 import {
   obtenerGrupoMixtoPorFecha,
   obtenerGrupo24x24PorFecha,
@@ -41,7 +45,7 @@ export const LISTA_CARGOS_OPERATIVOS: CargoOperativo[] = [
   'LIDER',
 ];
 
-export type HorarioOperativo = 'MIXTO' | '24X24' | 'DIURNO' | 'NOCTURNO';
+export type HorarioOperativo = 'MIXTO' | '24X24' | '48X48' | 'DIURNO' | 'NOCTURNO';
 
 interface OficialPlantilla {
   id: string;
@@ -99,18 +103,6 @@ interface MovimientoPlantilla {
 }
 
 const PROYECTOS_CON_JEFE_OP = ['ESTACIONAMIENTO CCCT', 'COMERCIO CCCT'];
-const PROYECTOS_CON_DIURNO = [
-  'CHACAITO',
-  'BARUTA',
-  'TRINIDAD',
-  'CENTRO PLAZA',
-  'CONCRESA',
-  'TRINITARIAS',
-  'LA GRANJA',
-  'ASOPROSUR',
-  'ASOPRSUR',
-];
-const PROYECTOS_CON_NOCTURNO = ['YARIBU', 'DUNCAN LA CALIFORNIA'];
 
 const obtenerFechaHoraCaracas = () => {
   const ahora = new Date();
@@ -136,12 +128,16 @@ export default function AsistenciaLiderPage() {
   const grupoMixtoHoy = obtenerGrupoMixtoPorFecha(hoyLocal);
   const grupo24x24Hoy = obtenerGrupo24x24PorFecha(hoyLocal);
 
-  const proyectosUsuario: string[] =
+  const proyectosUsuarioRaw: string[] =
     Array.isArray(currentUser?.proyectos) && currentUser.proyectos.length > 0
       ? currentUser.proyectos
       : currentUser?.proyecto_id
       ? [currentUser.proyecto_id]
       : ['SIN PROYECTO ASIGNADO'];
+
+  const proyectosUsuario = proyectosUsuarioRaw.filter(
+    (p) => p && !PROYECTOS_EXCLUIDOS.includes(p.trim().toUpperCase())
+  );
 
   const [proyectoSeleccionado, setProyectoSeleccionado] = useState<string>(
     proyectosUsuario.at(0) || 'SIN PROYECTO ASIGNADO'
@@ -165,7 +161,12 @@ export default function AsistenciaLiderPage() {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  const [filtroPlantilla, setFiltroPlantilla] = useState<'MIXTO' | '24X24' | 'DIURNO_NOCTURNO'>('MIXTO');
+  const configHorario = obtenerConfigHorarioProyecto(proyectoSeleccionado);
+  const pestanasDisponibles: HorarioOperativo[] = configHorario.turnosPermitidos;
+
+  const [filtroPlantilla, setFiltroPlantilla] = useState<HorarioOperativo>(
+    pestanasDisponibles.at(0) || 'MIXTO'
+  );
   const [grupoDesplegadoPlantilla, setGrupoDesplegadoPlantilla] = useState<'A' | 'B' | 'C'>(grupoMixtoHoy);
   const [busqueda, setBusqueda] = useState('');
 
@@ -175,7 +176,7 @@ export default function AsistenciaLiderPage() {
   const [apellidos, setApellidos] = useState('');
   const [cargoAlta, setCargoAlta] = useState<CargoOperativo>('OFICIAL');
   const [grupo, setGrupo] = useState<'A' | 'B' | 'C'>(grupoMixtoHoy);
-  const [turnoAlta, setTurnoAlta] = useState<HorarioOperativo>('MIXTO');
+  const [turnoAlta, setTurnoAlta] = useState<HorarioOperativo>(pestanasDisponibles.at(0) || 'MIXTO');
   const [tipoIngreso, setTipoIngreso] = useState<TipoAltaPlantilla>('NUEVO INGRESO');
   const [proyectoOrigen, setProyectoOrigen] = useState('');
   const [fechaFirmaContrato, setFechaFirmaContrato] = useState<string>(hoyLocal);
@@ -199,22 +200,20 @@ export default function AsistenciaLiderPage() {
   const nombreRegistrador = currentUser?.nombre_completo || currentUser?.username || 'Líder';
   const cargarProyectosDisponibles = async () => {
     try {
-      const nombresProyectos = new Set<string>([
-        ...(Array.isArray(PROYECTOS) ? PROYECTOS : []),
-        ...proyectosUsuario.filter((p) => p && p !== '*'),
-      ]);
-
-      const { data: projsTabla } = await supabase.from('projects').select('*');
-      if (Array.isArray(projsTabla)) {
-        projsTabla.forEach((p: any) => {
-          const val = p?.nombre || p?.name || p?.proyecto;
-          if (val) nombresProyectos.add(String(val).trim());
-        });
-      }
+      const nombresProyectos = new Set<string>(
+        [
+          ...(Array.isArray(PROYECTOS) ? PROYECTOS : []),
+          ...proyectosUsuario.filter((p) => p && p !== '*'),
+        ].filter((p) => !PROYECTOS_EXCLUIDOS.includes(p.trim().toUpperCase()))
+      );
 
       setListaProyectosGlobales(Array.from(nombresProyectos).sort());
     } catch {
-      setListaProyectosGlobales(Array.isArray(PROYECTOS) ? PROYECTOS : proyectosUsuario);
+      setListaProyectosGlobales(
+        (Array.isArray(PROYECTOS) ? PROYECTOS : proyectosUsuario).filter(
+          (p) => !PROYECTOS_EXCLUIDOS.includes(p.trim().toUpperCase())
+        )
+      );
     }
   };
 
@@ -260,7 +259,6 @@ export default function AsistenciaLiderPage() {
       const firmaMs = new Date(`${fechaRef}T12:00:00`).getTime();
       const diasTranscurridos = Math.floor((hoyMs - firmaMs) / (1000 * 60 * 60 * 24));
 
-      // Alerta preventiva entre los 25 y 30 días de período de prueba
       if (diasTranscurridos >= 25 && diasTranscurridos <= 31) {
         const diasRestantes = Math.max(0, 30 - diasTranscurridos);
         enRangoPrueba.push({
@@ -359,9 +357,15 @@ export default function AsistenciaLiderPage() {
   }, []);
 
   useEffect(() => {
+    const cfg = obtenerConfigHorarioProyecto(proyectoSeleccionado);
+    const primerTurno = cfg.turnosPermitidos.at(0) || 'MIXTO';
+    setFiltroPlantilla(primerTurno);
+    setTurnoAlta(primerTurno);
+    if ((primerTurno === '24X24' || primerTurno === '48X48') && grupoDesplegadoPlantilla === 'C') {
+      setGrupoDesplegadoPlantilla('A');
+    }
     cargarDatosProyecto();
   }, [proyectoSeleccionado]);
-
   const marcarAsistenciaDirecta = async (
     oficial: OficialPlantilla,
     nuevoEstatus:
@@ -487,7 +491,7 @@ export default function AsistenciaLiderPage() {
     }
 
     const grupoFinal: 'A' | 'B' | 'C' =
-      turnoAlta === '24X24' && grupo === 'C' ? 'A' : grupo;
+      (turnoAlta === '24X24' || turnoAlta === '48X48') && grupo === 'C' ? 'A' : grupo;
 
     setGuardando(true);
     try {
@@ -640,7 +644,7 @@ export default function AsistenciaLiderPage() {
       setApellidos('');
       setCargoAlta('OFICIAL');
       setGrupo(grupoMixtoHoy);
-      setTurnoAlta('MIXTO');
+      setTurnoAlta(configHorario.turnosPermitidos.at(0) || 'MIXTO');
       setProyectoOrigen('');
       setFechaFirmaContrato(hoyLocal);
       setBotasNuevasAsignadas(false);
@@ -683,7 +687,6 @@ export default function AsistenciaLiderPage() {
       setGuardando(false);
     }
   };
-
   const confirmarMovimientoOtro = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!oficialOtro) return;
@@ -928,13 +931,18 @@ export default function AsistenciaLiderPage() {
 
   const proyUpper = proyectoSeleccionado.toUpperCase();
   const tieneJefeOp = PROYECTOS_CON_JEFE_OP.includes(proyUpper);
-  const tieneDiurno = PROYECTOS_CON_DIURNO.includes(proyUpper);
-  const tieneNocturno = PROYECTOS_CON_NOCTURNO.includes(proyUpper);
+  const tieneLiderProyecto = configHorario.tieneLider;
+  const tieneMixtos =
+    configHorario.turnosPermitidos.includes('MIXTO') ||
+    configHorario.turnosPermitidos.includes('24X24');
+  const tiene48x48 = configHorario.turnosPermitidos.includes('48X48');
+  const tieneDiurno = configHorario.turnosPermitidos.includes('DIURNO');
+  const tieneNocturno = configHorario.turnosPermitidos.includes('NOCTURNO');
 
   const liderMarcadoEnLista = asistentesHoy.some(
     (a) => String(a.cargo || '').toUpperCase() === 'LIDER'
   );
-  const countLider = liderActivoPorQR || liderMarcadoEnLista ? 1 : 0;
+  const countLider = tieneLiderProyecto && (liderActivoPorQR || liderMarcadoEnLista) ? 1 : 0;
 
   const countJefeOp = tieneJefeOp
     ? asistentesHoy.filter((a) => String(a.cargo || '').toUpperCase() === 'J. OPERACIONES').length
@@ -944,6 +952,11 @@ export default function AsistenciaLiderPage() {
       String(a.cargo || '').toUpperCase() !== 'LIDER' &&
       String(a.cargo || '').toUpperCase() !== 'J. OPERACIONES' &&
       ['MIXTO', '24X24'].includes(String(a.turno || 'MIXTO').toUpperCase())
+  ).length;
+  const countOficiales48x48 = asistentesHoy.filter(
+    (a) =>
+      String(a.cargo || '').toUpperCase() !== 'LIDER' &&
+      String(a.turno || '').toUpperCase() === '48X48'
   ).length;
   const countOficialesDiurnos = asistentesHoy.filter(
     (a) =>
@@ -962,11 +975,11 @@ export default function AsistenciaLiderPage() {
     countLider +
     countJefeOp +
     countOficialesMixtos +
+    countOficiales48x48 +
     countOficialesDiurnos +
     countOficialesNocturnos;
 
   const pad2 = (n: number) => String(n).padStart(2, '0');
-
   const proyectosParaTraslado = listaProyectosGlobales.filter((p) => p !== proyectoSeleccionado);
 
   const formatearBadgeHorario = (of: OficialPlantilla) => {
@@ -975,16 +988,17 @@ export default function AsistenciaLiderPage() {
     }
     const trn = (of.turno || 'MIXTO').toUpperCase();
     if (trn === 'DIURNO' || trn === 'NOCTURNO') return trn;
+    if (trn === '48X48') return `48X48 • GRP ${of.grupo}`;
     if (trn === '24X24') return `24X24 • GRP ${of.grupo}`;
     return `MIXTO • GRP ${of.grupo}`;
   };
-
   const renderFilaOperativa = (oficial: OficialPlantilla, esLibreHoy: boolean) => {
     const ced = oficial.cedula.toUpperCase();
     const marcaHoy = asistenciasHoyMap[ced];
     const yaMarcadoPorLider = esLider && !!marcaHoy;
     const trn = (oficial.turno || 'MIXTO').toUpperCase();
-    const permiteServicioEspecial = trn === 'MIXTO' || trn === 'DIURNO' || trn === 'NOCTURNO';
+    const permiteServicioEspecial =
+      trn === 'MIXTO' || trn === '48X48' || trn === 'DIURNO' || trn === 'NOCTURNO';
     const cuotasPag = Number(oficial.botas_cuotas_pagadas || 0);
     const cuotasTot = Number(oficial.botas_cuotas_totales || 4);
 
@@ -1173,9 +1187,9 @@ export default function AsistenciaLiderPage() {
             <ClipboardCheck className="text-blue-600" size={26} /> Control de Asistencia y Plantilla
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Guardia Hoy ({hoyLocal}): <strong className="text-blue-700">MIXTO Grp {grupoMixtoHoy}</strong> •{' '}
-            <strong className="text-indigo-700">24X24 Grp {grupo24x24Hoy}</strong> •{' '}
-            <strong className="text-slate-700">DIURNO / NOCTURNO</strong>
+            Fecha ({hoyLocal}) • Horarios Activos:{' '}
+            <strong className="text-blue-700">{pestanasDisponibles.join(' / ')}</strong>
+            {!tieneLiderProyecto && ' • Proyecto sin Líder'}
           </p>
         </div>
 
@@ -1230,13 +1244,15 @@ export default function AsistenciaLiderPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
-          <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-            <div className="text-slate-400 font-bold uppercase">Líder de Proyecto</div>
-            <div className="text-xl font-black text-white mt-0.5">{pad2(countLider)}</div>
-            <div className="text-[10px] text-slate-400">
-              {liderActivoPorQR ? 'Activo por marca QR' : 'Sin entrada QR / Con salida'}
+          {tieneLiderProyecto && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Líder de Proyecto</div>
+              <div className="text-xl font-black text-white mt-0.5">{pad2(countLider)}</div>
+              <div className="text-[10px] text-slate-400">
+                {liderActivoPorQR ? 'Activo por marca QR' : 'Sin entrada QR / Con salida'}
+              </div>
             </div>
-          </div>
+          )}
 
           {tieneJefeOp && (
             <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
@@ -1245,11 +1261,23 @@ export default function AsistenciaLiderPage() {
             </div>
           )}
 
-          <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-            <div className="text-slate-400 font-bold uppercase">Oficiales Mixtos</div>
-            <div className="text-xl font-black text-blue-300 mt-0.5">{pad2(countOficialesMixtos)}</div>
-            <div className="text-[10px] text-slate-400">Incluye MIXTO + 24X24</div>
-          </div>
+          {(tieneMixtos || countOficialesMixtos > 0) && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Oficiales Mixtos</div>
+              <div className="text-xl font-black text-blue-300 mt-0.5">{pad2(countOficialesMixtos)}</div>
+              <div className="text-[10px] text-slate-400">
+                {configHorario.esCombinado ? 'Turno Mixto' : 'Incluye MIXTO + 24X24'}
+              </div>
+            </div>
+          )}
+
+          {(tiene48x48 || countOficiales48x48 > 0) && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Oficiales 48X48</div>
+              <div className="text-xl font-black text-cyan-300 mt-0.5">{pad2(countOficiales48x48)}</div>
+              <div className="text-[10px] text-slate-400">Rotación 48x48 (V-S-D alterno)</div>
+            </div>
+          )}
 
           {(tieneDiurno || countOficialesDiurnos > 0) && (
             <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
@@ -1266,6 +1294,7 @@ export default function AsistenciaLiderPage() {
           )}
         </div>
       </div>
+
       {mensaje && (
         <div
           className={`p-4 rounded-xl text-sm border flex items-start gap-2 ${
@@ -1304,7 +1333,6 @@ export default function AsistenciaLiderPage() {
           <ClipboardCheck size={18} /> ASISTENCIA DEL DÍA
         </button>
       </div>
-
       {seccionPrincipal === 'ASISTENCIA_GUARDIA' ? (
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
@@ -1439,17 +1467,16 @@ export default function AsistenciaLiderPage() {
               <History size={16} /> Historial ({movimientos.length})
             </button>
           </div>
-
           {subMenuPlantilla === 'LISTA_GENERAL' && (
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-5">
               <div className="flex flex-wrap gap-2">
-                {(['MIXTO', '24X24', 'DIURNO_NOCTURNO'] as const).map((tab) => (
+                {pestanasDisponibles.map((tab) => (
                   <button
                     key={tab}
                     type="button"
                     onClick={() => {
                       setFiltroPlantilla(tab);
-                      if (tab === '24X24' && grupoDesplegadoPlantilla === 'C') {
+                      if ((tab === '24X24' || tab === '48X48') && grupoDesplegadoPlantilla === 'C') {
                         setGrupoDesplegadoPlantilla('A');
                       }
                     }}
@@ -1459,16 +1486,14 @@ export default function AsistenciaLiderPage() {
                         : 'bg-slate-50 text-slate-700 border-slate-200'
                     }`}
                   >
-                    {tab === 'MIXTO'
-                      ? 'MIXTO'
-                      : tab === '24X24'
-                      ? '24X24'
-                      : 'DIURNO / NOCTURNO'}
+                    {tab}
                   </button>
                 ))}
               </div>
 
-              {filtroPlantilla !== 'DIURNO_NOCTURNO' && (
+              {(filtroPlantilla === 'MIXTO' ||
+                filtroPlantilla === '24X24' ||
+                filtroPlantilla === '48X48') && (
                 <div className="flex flex-wrap gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <span className="text-xs font-bold text-slate-500 self-center mr-1">
                     Seleccione Grupo:
@@ -1509,20 +1534,21 @@ export default function AsistenciaLiderPage() {
                   const grp = (item.grupo || 'A').toUpperCase();
                   const texto = `${item.cedula} ${item.nombres} ${item.apellidos} ${item.cargo || ''}`.toLowerCase();
                   if (!texto.includes(busqueda.toLowerCase().trim())) return false;
-                  if (filtroPlantilla === 'MIXTO') {
-                    return trn === 'MIXTO' && grp === grupoDesplegadoPlantilla;
+                  if (
+                    filtroPlantilla === 'MIXTO' ||
+                    filtroPlantilla === '24X24' ||
+                    filtroPlantilla === '48X48'
+                  ) {
+                    return trn === filtroPlantilla && grp === grupoDesplegadoPlantilla;
                   }
-                  if (filtroPlantilla === '24X24') {
-                    return trn === '24X24' && grp === grupoDesplegadoPlantilla;
-                  }
-                  return trn === 'DIURNO' || trn === 'NOCTURNO';
+                  return trn === filtroPlantilla;
                 });
 
                 return (
                   <div className="space-y-2">
                     <h3 className="text-sm font-black text-slate-800 uppercase border-b border-slate-100 pb-2">
-                      {filtroPlantilla === 'DIURNO_NOCTURNO'
-                        ? `PLANTILLA DIURNO / NOCTURNO (${miembrosDesplegados.length})`
+                      {filtroPlantilla === 'DIURNO' || filtroPlantilla === 'NOCTURNO'
+                        ? `PLANTILLA ${filtroPlantilla} (${miembrosDesplegados.length})`
                         : `PLANTILLA ${filtroPlantilla} — GRUPO ${grupoDesplegadoPlantilla} (${miembrosDesplegados.length})`}
                     </h3>
                     {miembrosDesplegados.length === 0 ? (
@@ -1569,7 +1595,11 @@ export default function AsistenciaLiderPage() {
                           setApellidos(asp.apellidos || '');
                           const cargoSel = (asp.cargo_asignado || 'OFICIAL') as CargoOperativo;
                           setCargoAlta(cargoSel);
-                          setTurnoAlta(cargoSel === 'LIDER' ? 'DIURNO' : ((asp.turno_asignado || 'MIXTO') as HorarioOperativo));
+                          setTurnoAlta(
+                            cargoSel === 'LIDER'
+                              ? 'DIURNO'
+                              : ((asp.turno_asignado || pestanasDisponibles.at(0) || 'MIXTO') as HorarioOperativo)
+                          );
                           setGrupo((asp.grupo_asignado || 'A') as 'A' | 'B' | 'C');
                           setTipoIngreso('NUEVO INGRESO');
                           setFechaFirmaContrato(hoyLocal);
@@ -1650,21 +1680,22 @@ export default function AsistenciaLiderPage() {
                     onChange={(e) => {
                       const val = e.target.value as HorarioOperativo;
                       setTurnoAlta(val);
-                      if (val === '24X24' && grupo === 'C') setGrupo('A');
+                      if ((val === '24X24' || val === '48X48') && grupo === 'C') setGrupo('A');
                     }}
                     className="w-full border border-blue-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-blue-900 bg-blue-50/40"
                   >
-                    <option value="MIXTO">MIXTO</option>
-                    <option value="24X24">24X24</option>
-                    <option value="DIURNO">DIURNO</option>
-                    <option value="NOCTURNO">NOCTURNO</option>
+                    {pestanasDisponibles.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
-                {(turnoAlta === 'MIXTO' || turnoAlta === '24X24') && (
+                {(turnoAlta === 'MIXTO' || turnoAlta === '24X24' || turnoAlta === '48X48') && (
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                      {turnoAlta === '24X24' ? 'Grupo 24X24 (A o B) *' : 'Grupo MIXTO (A, B o C) *'}
+                      {turnoAlta === 'MIXTO' ? 'Grupo MIXTO (A, B o C) *' : `Grupo ${turnoAlta} (A o B) *`}
                     </label>
                     <select
                       value={grupo}
@@ -1847,10 +1878,11 @@ export default function AsistenciaLiderPage() {
                   onChange={(e) => setTurnoOtro(e.target.value as HorarioOperativo)}
                   className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-blue-800 bg-blue-50/40"
                 >
-                  <option value="MIXTO">MIXTO</option>
-                  <option value="24X24">24X24</option>
-                  <option value="DIURNO">DIURNO</option>
-                  <option value="NOCTURNO">NOCTURNO</option>
+                  {pestanasDisponibles.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

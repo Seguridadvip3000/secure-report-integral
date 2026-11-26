@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReports } from '../context/ReportContext';
 import { useAuth } from '../context/AuthContext';
-import { PROYECTOS, TITULOS_NOVEDAD } from '../data/constants';
+import { PROYECTOS, PROYECTOS_EXCLUIDOS, TITULOS_NOVEDAD } from '../data/constants';
 import { notificationService } from '../services/notificationService';
 import {
   ArrowLeft,
@@ -35,7 +35,9 @@ export default function NewReport() {
 
   const rolUsuario = currentUser?.role?.toLowerCase() || '';
   const proyectosUsuario = Array.isArray(currentUser?.proyectos)
-    ? currentUser.proyectos.filter((p) => p && p !== '*')
+    ? currentUser.proyectos.filter(
+        (p) => p && p !== '*' && !PROYECTOS_EXCLUIDOS.includes(p.trim().toUpperCase())
+      )
     : [];
   const esAsignadoFijo =
     (rolUsuario === 'lider' || rolUsuario === 'supervisor') && proyectosUsuario.length === 1;
@@ -49,6 +51,7 @@ export default function NewReport() {
   const [form, setForm] = useState({
     proyecto: esAsignadoFijo ? proyectoFijo : '',
     tituloNovedad: '',
+    tituloManual: '',
     desarrollo: '',
   });
 
@@ -81,10 +84,15 @@ export default function NewReport() {
     };
   }, []);
 
+  const esOtroTitulo = form.tituloNovedad === 'OTRA:' || form.tituloNovedad.toUpperCase() === 'OTRO';
+
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!form.proyecto) newErrors.proyecto = 'Seleccione un proyecto';
     if (!form.tituloNovedad) newErrors.tituloNovedad = 'Seleccione un tipo de novedad';
+    if (esOtroTitulo && !form.tituloManual.trim()) {
+      newErrors.tituloManual = 'Escriba el título manual de la novedad';
+    }
     if (!form.desarrollo.trim()) newErrors.desarrollo = 'El desarrollo es requerido';
     if (evidencias.length < 2) newErrors.evidencias = 'Debe cargar mínimo 2 fotos de evidencia';
     setErrors(newErrors);
@@ -112,6 +120,7 @@ export default function NewReport() {
   const removeEvidence = (index: number) => {
     setEvidencias(prev => prev.filter((_, i) => i !== index));
   };
+
   const getGPSLocation = (): Promise<{ location: { lat: number; lng: number; address?: string }; usedDefault: boolean }> => {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
@@ -144,7 +153,6 @@ export default function NewReport() {
       );
     });
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate() || !currentUser) return;
@@ -155,6 +163,8 @@ export default function NewReport() {
       return;
     }
 
+    const tituloFinal = esOtroTitulo ? form.tituloManual.trim().toUpperCase() : form.tituloNovedad;
+
     try {
       setLoading(true);
       const { location, usedDefault } = await getGPSLocation();
@@ -164,7 +174,7 @@ export default function NewReport() {
       const reportData = {
         fechaHora: new Date().toISOString(),
         proyecto: form.proyecto,
-        tituloNovedad: form.tituloNovedad,
+        tituloNovedad: tituloFinal,
         desarrollo: form.desarrollo,
         evidencias: evidencias,
         ubicacionGPS: location,
@@ -176,7 +186,7 @@ export default function NewReport() {
       await addReport(reportData);
 
       try {
-        await notificationService.notifyNewReportCreated(form.proyecto, form.tituloNovedad);
+        await notificationService.notifyNewReportCreated(form.proyecto, tituloFinal);
       } catch (notificationError) {
         console.error('Error enviando notificación:', notificationError);
       }
@@ -217,6 +227,7 @@ export default function NewReport() {
                 setForm({
                   proyecto: esAsignadoFijo ? proyectoFijo : '',
                   tituloNovedad: '',
+                  tituloManual: '',
                   desarrollo: '',
                 });
                 setEvidencias([]);
@@ -238,6 +249,10 @@ export default function NewReport() {
       </div>
     );
   }
+
+  const opcionesProyecto = (proyectosUsuario.length > 0 ? proyectosUsuario : PROYECTOS).filter(
+    (p) => !PROYECTOS_EXCLUIDOS.includes(p.trim().toUpperCase())
+  );
   return (
     <div className="max-w-3xl mx-auto space-y-6 p-4 md:p-6">
       <div className="flex items-center justify-between">
@@ -297,7 +312,7 @@ export default function NewReport() {
                 }`}
               >
                 <option value="">Seleccione un proyecto</option>
-                {(proyectosUsuario.length > 0 ? proyectosUsuario : PROYECTOS).map(p => (
+                {opcionesProyecto.map(p => (
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
@@ -322,8 +337,25 @@ export default function NewReport() {
               ))}
             </select>
             {errors.tituloNovedad && <p className="text-xs text-red-500 mt-1">{errors.tituloNovedad}</p>}
-          </div>
 
+            {esOtroTitulo && (
+              <div className="mt-3 p-3 bg-blue-50/60 border border-blue-200 rounded-lg">
+                <label className="block text-xs font-bold text-blue-900 mb-1">
+                  Título Manual de la Novedad *
+                </label>
+                <input
+                  type="text"
+                  value={form.tituloManual}
+                  onChange={e => handleChange('tituloManual', e.target.value)}
+                  placeholder="Escriba el título personalizado de la novedad..."
+                  className={`w-full px-3.5 py-2 border rounded-lg bg-white text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 ${
+                    errors.tituloManual ? 'border-red-400' : 'border-blue-300'
+                  }`}
+                />
+                {errors.tituloManual && <p className="text-xs text-red-500 mt-1">{errors.tituloManual}</p>}
+              </div>
+            )}
+          </div>
           <div>
             <label className="text-sm font-medium text-slate-700 mb-1.5 block">
               Desarrollo de la Novedad *

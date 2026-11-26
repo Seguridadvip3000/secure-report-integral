@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { PROYECTOS } from '../data/constants';
+import { PROYECTOS, PROYECTOS_EXCLUIDOS } from '../data/constants';
 import { leTocaGuardiaHoy } from '../utils/rotacionGuardia';
 import ExcelJS from 'exceljs';
 import { jsPDF } from 'jspdf';
@@ -82,12 +82,18 @@ export default function RelacionInasistenciasPage() {
 
   useEffect(() => {
     const cargarProy = async () => {
-      const setP = new Set<string>(Array.isArray(PROYECTOS) ? PROYECTOS : []);
-      const { data } = await supabase.from('projects').select('*');
+      const setP = new Set<string>(
+        (Array.isArray(PROYECTOS) ? PROYECTOS : []).filter(
+          (p) => !PROYECTOS_EXCLUIDOS.includes(p.trim().toUpperCase())
+        )
+      );
+      const { data } = await supabase.from('plantilla_proyectos').select('proyecto');
       if (Array.isArray(data)) {
         data.forEach((p: any) => {
-          const val = p?.nombre || p?.name || p?.proyecto;
-          if (val) setP.add(String(val).trim());
+          const val = String(p?.proyecto || '').trim();
+          if (val && !PROYECTOS_EXCLUIDOS.includes(val.toUpperCase())) {
+            setP.add(val);
+          }
         });
       }
       const arr = Array.from(setP).sort();
@@ -312,7 +318,7 @@ export default function RelacionInasistenciasPage() {
       })
     );
   };
-    const exportarExcelInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
+  const exportarExcelInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
     setModalExportarFormato(null);
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet(proyecto.slice(0, 28) || 'INASISTENCIAS', {
@@ -450,7 +456,6 @@ export default function RelacionInasistenciasPage() {
     if (alcance === '1RA' || alcance === 'MES') escribirBloqueQuincena('1RA', filas1ra);
     if (alcance === '2DA' || alcance === 'MES') escribirBloqueQuincena('2DA', filas2da);
 
-    // Bloque de firmas inferior izquierda (Entrega) y derecha (Recibido Cliente)
     ws.addRow([]);
     const rTitFirmas = ws.addRow([
       'ENTREGADO POR (SEGURIDAD VIP 3000 C.A.)',
@@ -503,8 +508,7 @@ export default function RelacionInasistenciasPage() {
     a.click();
     URL.revokeObjectURL(url);
   };
-
-    const exportarPDFInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
+  const exportarPDFInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
     setModalExportarFormato(null);
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
     const logo = await cargarLogoBase64();
@@ -578,7 +582,6 @@ export default function RelacionInasistenciasPage() {
     if (alcance === '1RA' || alcance === 'MES') dibujarTablaQuincena('1RA QUINCENA', filas1ra);
     if (alcance === '2DA' || alcance === 'MES') dibujarTablaQuincena('2DA QUINCENA', filas2da);
 
-    // Bloque de firmas inferior izquierda (Entrega) y derecha (Recibido Cliente)
     if (y > 220) {
       doc.addPage();
       y = 22;
@@ -622,7 +625,7 @@ export default function RelacionInasistenciasPage() {
               {titulo} {NOMBRES_MESES[mes - 1]} {anio} — {proyecto}
             </h3>
             <p className="text-[11px] text-slate-500">
-              Diurno incluye Líder QR + Diurnos • Nocturno incluye Nocturnos + Mixtos + 24X24.
+              Diurno incluye Líder QR + Diurnos • Nocturno incluye Nocturnos + Mixtos + 24X24 + 48X48.
             </p>
           </div>
           <span className="px-3 py-1 rounded-lg bg-slate-900 text-white text-xs font-black">

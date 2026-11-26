@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { PROYECTOS } from '../data/constants';
+import { PROYECTOS, PROYECTOS_EXCLUIDOS } from '../data/constants';
 import { leTocaGuardiaHoy } from '../utils/rotacionGuardia';
 import { generarPDFRecibosNomina, ItemReciboNomina } from '../utils/pdfRecibosNomina';
 import {
@@ -44,10 +44,8 @@ export default function NominaRecibosPage() {
   const [quincena, setQuincena] = useState<'1ERA' | '2DA'>(hoy.getDate() <= 15 ? '1ERA' : '2DA');
   const [fechaPago, setFechaPago] = useState<string>(hoy.toLocaleDateString('en-CA'));
 
-  // Tasa referencial empresa para cuotas de botas ($7.5 c/u)
   const [tasaReferencialBs, setTasaReferencialBs] = useState<number>(0);
 
-  // Parámetros editables de devengados
   const [valorDia, setValorDia] = useState<number>(43.33);
   const [bonoNocturnoPorNoche, setBonoNocturnoPorNoche] = useState<number>(13.0);
   const [doceavaHoraPorDia, setDoceavaHoraPorDia] = useState<number>(11.82);
@@ -61,7 +59,6 @@ export default function NominaRecibosPage() {
   const [ropaTrabajo2, setRopaTrabajo2] = useState<number>(0);
   const [alimentacionDiaria, setAlimentacionDiaria] = useState<number>(0);
 
-  // Deducciones base editables
   const [seguroSocialBase, setSeguroSocialBase] = useState<number>(2.4);
   const [paroForzosoBase, setParoForzosoBase] = useState<number>(0);
   const [ahorroHabBase, setAhorroHabBase] = useState<number>(0);
@@ -75,18 +72,23 @@ export default function NominaRecibosPage() {
   const [nominaPagada, setNominaPagada] = useState<boolean>(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
 
-  // Histórico de nóminas y recibos
   const [historicoRecibos, setHistoricoRecibos] = useState<any[]>([]);
   const [busquedaHistorico, setBusquedaHistorico] = useState<string>('');
 
   useEffect(() => {
     const cargarProy = async () => {
-      const setP = new Set<string>(Array.isArray(PROYECTOS) ? PROYECTOS : []);
-      const { data } = await supabase.from('projects').select('*');
+      const setP = new Set<string>(
+        (Array.isArray(PROYECTOS) ? PROYECTOS : []).filter(
+          (p) => !PROYECTOS_EXCLUIDOS.includes(p.trim().toUpperCase())
+        )
+      );
+      const { data } = await supabase.from('plantilla_proyectos').select('proyecto');
       if (Array.isArray(data)) {
         data.forEach((p: any) => {
-          const val = p?.nombre || p?.name || p?.proyecto;
-          if (val) setP.add(String(val).trim());
+          const val = String(p?.proyecto || '').trim();
+          if (val && !PROYECTOS_EXCLUIDOS.includes(val.toUpperCase())) {
+            setP.add(val);
+          }
         });
       }
       const arr = Array.from(setP).sort();
@@ -376,7 +378,6 @@ export default function NominaRecibosPage() {
       netoPagado,
     };
   };
-
   const marcarNominaPagadaYEmitirRecibos = async () => {
     if (filas.length === 0) return;
 
