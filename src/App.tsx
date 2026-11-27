@@ -29,6 +29,8 @@ const VerificacionServiciosEspecialesPage = lazy(() => import('./pages/Verificac
 const ReclutamientoHome = lazy(() => import('./pages/ReclutamientoHome'));
 const EgresadosPage = lazy(() => import('./pages/EgresadosPage'));
 const ConsultaFichaTecnicaPage = lazy(() => import('./pages/ConsultaFichaTecnicaPage'));
+const FichaTecnicaLiderPage = lazy(() => import('./pages/FichaTecnicaLiderPage'));
+const GeocercasProyectosPage = lazy(() => import('./pages/GeocercasProyectosPage'));
 const NominaRecibosPage = lazy(() => import('./pages/NominaRecibosPage'));
 const TableroCoberturaPage = lazy(() => import('./pages/TableroCoberturaPage'));
 const CecomLlamadasControlPage = lazy(() => import('./pages/CecomLlamadasControlPage'));
@@ -60,7 +62,7 @@ function RoleRoute({ roles, children }: { roles: string[]; children: ReactNode }
   if (rolNormalizado === 'administrador' || rolNormalizado === 'admin') {
     return <>{children}</>;
   }
-  const rolesPermitidosNormalizados = roles.map(r => r.toLowerCase());
+  const rolesPermitidosNormalizados = roles.map((r) => r.toLowerCase());
   if (!rolesPermitidosNormalizados.includes(rolNormalizado)) {
     return <Navigate to="/" replace />;
   }
@@ -128,10 +130,10 @@ export default function App() {
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
-              
+
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route index element={<RootRedirect />} />
-                
+
                 <Route path="crear-reporte" element={
                   <RoleRoute roles={['lider', 'supervisor', 'cecom', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <NewReport />
@@ -141,6 +143,18 @@ export default function App() {
                 <Route path="asistencia" element={
                   <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <AsistenciaLiderPage />
+                  </RoleRoute>
+                } />
+
+                <Route path="ficha-tecnica-lider" element={
+                  <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'admin']}>
+                    <FichaTecnicaLiderPage />
+                  </RoleRoute>
+                } />
+
+                <Route path="geocercas" element={
+                  <RoleRoute roles={['directiva', 'administrador', 'admin']}>
+                    <GeocercasProyectosPage />
                   </RoleRoute>
                 } />
 
@@ -174,11 +188,11 @@ export default function App() {
                   </RoleRoute>
                 } />
 
-		<Route path="vacaciones" element={
-  		  <RoleRoute roles={['analista', 'rrhh', 'recursos_humanos', 'directiva', 'administrador', 'admin']}>
-   		    <VacacionesPage />
-  		  </RoleRoute>
-		} />
+                <Route path="vacaciones" element={
+                  <RoleRoute roles={['analista', 'rrhh', 'recursos_humanos', 'directiva', 'administrador', 'admin']}>
+                    <VacacionesPage />
+                  </RoleRoute>
+                } />
 
                 <Route path="home-reclutamiento" element={
                   <RoleRoute roles={['reclutamiento', 'rrhh', 'recursos_humanos', 'directiva', 'administrador', 'admin']}>
@@ -197,7 +211,7 @@ export default function App() {
                     <EgresadosPage />
                   </RoleRoute>
                 } />
-                
+
                 <Route path="monitor-asistencia" element={
                   <RoleRoute roles={['cecom', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <MonitorPorRolRoute />
@@ -215,13 +229,13 @@ export default function App() {
                     <ReportList />
                   </RoleRoute>
                 } />
-                
+
                 <Route path="lista-reportes/:id" element={
                   <RoleRoute roles={['lider', 'supervisor', 'cecom', 'operaciones', 'directiva', 'administrador', 'admin', 'cliente']}>
                     <ReportDetail />
                   </RoleRoute>
                 } />
-                
+
                 <Route path="aprobaciones" element={
                   <RoleRoute roles={['operaciones', 'directiva', 'administrador', 'admin']}>
                     <AprobacionesPage />
@@ -257,7 +271,7 @@ export default function App() {
                     <SeguimientoRutasPage />
                   </RoleRoute>
                 } />
-                
+
                 <Route path="dashboard-cliente" element={
                   <RoleRoute roles={['cliente']}>
                     <ClienteDashboard />
@@ -288,7 +302,7 @@ export default function App() {
                     <AdministradorHome />
                   </RoleRoute>
                 } />
-                
+
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>
@@ -298,7 +312,6 @@ export default function App() {
     </AuthProvider>
   );
 }
-
 function Layout() {
   const { currentUser } = useAuth();
   const [diagnosticoPush, setDiagnosticoPush] = React.useState<string | null>(null);

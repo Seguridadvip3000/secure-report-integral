@@ -4,7 +4,17 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { notificationService } from '../services/notificationService';
 import QRScannerModal from '../components/QRScannerModal';
-import { AlertCircle, CheckCircle2, FilePlus, LogIn, LogOut, Clock, QrCode, Users } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  FilePlus,
+  LogIn,
+  LogOut,
+  Clock,
+  QrCode,
+  Users,
+  UserCheck,
+} from 'lucide-react';
 
 export default function LiderHome() {
   const { currentUser } = useAuth();
@@ -25,7 +35,7 @@ export default function LiderHome() {
 
   const proyectoPrincipal =
     Array.isArray(currentUser?.proyectos) && currentUser.proyectos.length > 0
-      ? currentUser.proyectos[0]
+      ? currentUser.proyectos.at(0) || 'Asignación General'
       : currentUser?.proyecto_id || 'Asignación General';
 
   const verificarEstadoAsistencia = async () => {
@@ -64,7 +74,6 @@ export default function LiderHome() {
       supabase.removeChannel(channel);
     };
   }, [currentUser]);
-
   const obtenerGpsActual = (): Promise<{ lat: number; lng: number }> => {
     return new Promise((resolve) => {
       if (!('geolocation' in navigator)) {
@@ -78,14 +87,19 @@ export default function LiderHome() {
       );
     });
   };
-  const confirmarAsistenciaTrasQR = async (tipo: 'ENTRADA' | 'SALIDA', proyectoVerificado: string) => {
+
+  const confirmarAsistenciaTrasQR = async (
+    tipo: 'ENTRADA' | 'SALIDA',
+    proyectoVerificado: string,
+    coordsCerco?: { lat: number; lng: number; distancia?: number }
+  ) => {
     if (!currentUser) return;
     setAccionQRActiva(null);
     setProcesandoAsistencia(true);
     setNotificacion(null);
 
     try {
-      const coords = await obtenerGpsActual();
+      const coords = coordsCerco ? { lat: coordsCerco.lat, lng: coordsCerco.lng } : await obtenerGpsActual();
 
       const { error: dbError } = await supabase.from('asistencias_lideres').insert([
         {
@@ -95,6 +109,7 @@ export default function LiderHome() {
           tipo,
           latitude: coords.lat,
           longitude: coords.lng,
+          distancia_metros: coordsCerco?.distancia ?? null,
         },
       ]);
 
@@ -114,14 +129,17 @@ export default function LiderHome() {
 
       await notificationService.notifyLiderAttendance(nombreLider, proyectoVerificado, tipo);
 
+      const detalleDistancia =
+        typeof coordsCerco?.distancia === 'number' ? ` (GPS validado a ${coordsCerco.distancia}m)` : '';
+
       setEnTurnoActivo(tipo === 'ENTRADA');
       setUltimaMarcacion(`${tipo} verificada por QR hoy a las ${new Date().toLocaleTimeString('es-VE')}`);
       setNotificacion({
         tipo: 'exito',
         mensaje:
           tipo === 'ENTRADA'
-            ? `✅ QR Verificado: Entrada reportada en ${proyectoVerificado}. Se habilitó el botón de Salida.`
-            : `✅ QR Verificado: Salida reportada en ${proyectoVerificado}. Turno finalizado correctamente.`,
+            ? `✅ QR Verificado${detalleDistancia}: Entrada reportada en ${proyectoVerificado}. Se habilitó el botón de Salida.`
+            : `✅ QR Verificado${detalleDistancia}: Salida reportada en ${proyectoVerificado}. Turno finalizado correctamente.`,
       });
     } catch (err: any) {
       setNotificacion({
@@ -201,7 +219,11 @@ export default function LiderHome() {
           titulo={`Escanear QR para ${accionQRActiva}`}
           subtitulo={`Proyecto asignado: ${proyectoPrincipal}`}
           proyectoEsperado={proyectoPrincipal}
-          onScanSuccess={(proyectoLeido) => confirmarAsistenciaTrasQR(accionQRActiva, proyectoLeido)}
+          liderId={currentUser?.id}
+          nombreLider={nombreLider}
+          onScanSuccess={(proyectoLeido, coordsCerco) =>
+            confirmarAsistenciaTrasQR(accionQRActiva, proyectoLeido, coordsCerco)
+          }
           onClose={() => setAccionQRActiva(null)}
         />
       )}
@@ -289,6 +311,13 @@ export default function LiderHome() {
           className="w-full bg-slate-900 hover:bg-slate-800 text-white p-4 rounded-2xl shadow-sm flex items-center justify-center gap-3 font-bold text-base transition-all active:scale-95 cursor-pointer"
         >
           <Users size={22} /> ASISTENCIA Y PLANTILLA DEL PROYECTO
+        </button>
+
+        <button
+          onClick={() => navigate('/ficha-tecnica-lider')}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-2xl shadow-sm flex items-center justify-center gap-3 font-bold text-base transition-all active:scale-95 cursor-pointer"
+        >
+          <UserCheck size={22} /> FICHA TÉCNICA Y FOTO DE OFICIALES
         </button>
 
         <button

@@ -6,6 +6,7 @@ import {
   List,
   UserCheck,
   Map,
+  MapPin,
   Settings,
   Menu,
   X,
@@ -38,6 +39,8 @@ export default function Sidebar() {
 
   const puedeCrearReporte = esAdminTotal || ['directiva', 'operaciones', 'cecom', 'supervisor', 'lider'].includes(rol);
   const puedeVerAsistenciaLider = esAdminTotal || rol === 'lider';
+  const puedeVerFichaLider = esAdminTotal || ['lider', 'operaciones', 'directiva'].includes(rol);
+  const puedeVerGeocercas = esAdminTotal || ['operaciones', 'directiva'].includes(rol);
   const puedeVerTableroCobertura = esAdminTotal || ['directiva', 'operaciones'].includes(rol);
   const puedeVerLlamadasCecom = esAdminTotal || ['cecom', 'operaciones', 'directiva'].includes(rol);
   const puedeVerRelacionInasistencias = esAdminTotal || ['operaciones', 'directiva'].includes(rol);
@@ -69,7 +72,6 @@ export default function Sidebar() {
       : rol === 'operaciones'
       ? 'Personal Operativo'
       : 'Asistencia Proyectos';
-
   return (
     <>
       <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-slate-950 text-white px-4 pt-8 pb-3 flex items-center justify-between shadow-md border-b border-slate-800">
@@ -145,6 +147,30 @@ export default function Sidebar() {
               </Link>
             )}
 
+            {puedeVerFichaLider && (
+              <Link
+                to="/ficha-tecnica-lider"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/ficha-tecnica-lider' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <Contact size={18} /> Ficha Oficiales (Foto)
+              </Link>
+            )}
+
+            {puedeVerGeocercas && (
+              <Link
+                to="/geocercas"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/geocercas' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <MapPin size={18} /> Cercos GPS (QR)
+              </Link>
+            )}
+
             {puedeVerTableroCobertura && (
               <Link
                 to="/tablero-cobertura"
@@ -180,7 +206,6 @@ export default function Sidebar() {
                 <ClipboardList size={18} /> Relación Inasistencias
               </Link>
             )}
-
             {puedeVerMonitorAsistencia && (
               <Link
                 to="/monitor-asistencia"
@@ -207,7 +232,7 @@ export default function Sidebar() {
 
             {puedeVerNominaRecibos && (
               <Link
-		to="/nomina-recibos"
+                to="/nomina-recibos"
                 onClick={cerrarMenu}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   location.pathname === '/nomina-recibos' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-900'
@@ -217,17 +242,17 @@ export default function Sidebar() {
               </Link>
             )}
 
-	    {puedeVerNominaRecibos && (
-  	      <Link
-		to="/vacaciones"
-    		onClick={cerrarMenu}
-    		className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-      		  location.pathname === '/vacaciones' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-900'
-    		}`}
-  	      >
-    		<Palmtree size={18} /> Vacaciones y Finiquito
-  	      </Link>
-	    )}
+            {puedeVerNominaRecibos && (
+              <Link
+                to="/vacaciones"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/vacaciones' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <Palmtree size={18} /> Vacaciones y Finiquito
+              </Link>
+            )}
 
             {puedeVerVerificacionSE && (
               <Link
@@ -252,6 +277,7 @@ export default function Sidebar() {
                 <UserPlus size={18} /> Reclutamiento
               </Link>
             )}
+
             {puedeVerFichaTecnica && (
               <Link
                 to="/ficha-tecnica"
