@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Camera, X, AlertCircle, ShieldCheck } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { validarUbicacionEnCerco } from '../utils/geofencing';
+import { Camera, X, AlertCircle, ShieldCheck, MapPin } from 'lucide-react';
 
 interface QRScannerModalProps {
   titulo: string;
   subtitulo: string;
   proyectoEsperado?: string;
-  onScanSuccess: (proyectoEscaneado: string) => void;
+  liderId?: string;
+  nombreLider?: string;
+  onScanSuccess: (proyectoEscaneado: string, coords?: { lat: number; lng: number; distancia?: number }) => void;
   onClose: () => void;
 }
 
@@ -14,10 +18,13 @@ export default function QRScannerModal({
   titulo,
   subtitulo,
   proyectoEsperado,
+  liderId,
+  nombreLider,
   onScanSuccess,
   onClose,
 }: QRScannerModalProps) {
   const [errorCamara, setErrorCamara] = useState<string | null>(null);
+  const [verificandoGPS, setVerificandoGPS] = useState<boolean>(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const procesadoRef = useRef(false);
 
@@ -34,7 +41,7 @@ export default function QRScannerModal({
             fps: 10,
             qrbox: { width: 240, height: 240 },
           },
-          (decodedText) => {
+          async (decodedText) => {
             if (procesadoRef.current) return;
 
             const prefijo = 'VIP3000_PROYECTO:';
@@ -56,16 +63,67 @@ export default function QRScannerModal({
             }
 
             procesadoRef.current = true;
-            html5QrCode
-              .stop()
-              .catch(() => {})
-              .finally(() => {
-                onScanSuccess(proyectoLeido);
-              });
+            setVerificandoGPS(true);
+            setErrorCamara(null);
+
+            try {
+              const { data: cerco } = await supabase
+                .from('geocercas_proyectos')
+                .select('*')
+                .ilike('proyecto', proyectoLeido)
+                .eq('activo', true)
+                .maybeSingle();
+
+              if (cerco) {
+                const resGPS = await validarUbicacionEnCerco(
+                  Number(cerco.latitud),
+                  Number(cerco.longitud),
+                  Number(cerco.radio_metros || 100)
+                );
+
+                if (!resGPS.dentroDelCerco) {
+                  await supabase.from('intentos_qr_fuera_cerco').insert([
+                    {
+                      lider_id: liderId || null,
+                      nombre_lider: nombreLider || 'Líder',
+                      proyecto: proyectoLeido,
+                      latitud: resGPS.latitud,
+                      longitud: resGPS.longitud,
+                      distancia_metros: resGPS.distanciaMetros,
+                      radio_permitido: Number(cerco.radio_metros || 100),
+                    },
+                  ]);
+
+                  procesadoRef.current = false;
+                  setVerificandoGPS(false);
+                  setErrorCamara(
+                    `🚫 BLOQUEADO POR CERCO GEOGRÁFICO: Te encuentras a ${resGPS.distanciaMetros} metros de ${proyectoLeido} (radio máximo permitido: ${cerco.radio_metros} m). Debes estar dentro del puesto para marcar.`
+                  );
+                  return;
+                }
+
+                await html5QrCode.stop().catch(() => {});
+                onScanSuccess(proyectoLeido, {
+                  lat: resGPS.latitud,
+                  lng: resGPS.longitud,
+                  distancia: resGPS.distanciaMetros,
+                });
+                return;
+              }
+
+              await html5QrCode.stop().catch(() => {});
+              onScanSuccess(proyectoLeido);
+            } catch (gpsErr: any) {
+              procesadoRef.current = false;
+              setVerificandoGPS(false);
+              setErrorCamara(
+                `📍 ${gpsErr?.message || 'Active el GPS de su teléfono para validar su ubicación.'}`
+              );
+            }
           },
           () => {}
         );
-      } catch (err) {
+      } catch {
         setErrorCamara(
           'No se pudo abrir la cámara en vivo. Verifique que el permiso de cámara esté autorizado en su teléfono.'
         );
@@ -79,7 +137,8 @@ export default function QRScannerModal({
         scannerRef.current.stop().catch(() => {});
       }
     };
-  }, [proyectoEsperado, onScanSuccess]);
+  }, [proyectoEsperado, liderId, nombreLider, onScanSuccess]);
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/90 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-200">
@@ -104,7 +163,7 @@ export default function QRScannerModal({
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 flex items-center gap-2 text-xs text-blue-800">
             <ShieldCheck size={16} className="text-blue-600 shrink-0" />
             <span>
-              <strong>Verificación en Vivo:</strong> Apunte la cámara directamente al código QR físico ubicado en el puesto de servicio.
+              <strong>Verificación GPS + QR en Vivo:</strong> Debe encontrarse dentro del perímetro del proyecto con el GPS activo.
             </span>
           </div>
 
@@ -113,8 +172,15 @@ export default function QRScannerModal({
             className="w-full rounded-xl overflow-hidden bg-black min-h-[280px]"
           />
 
+          {verificandoGPS && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-lg p-3 flex items-center gap-2 font-bold">
+              <MapPin size={16} className="animate-bounce text-amber-600 shrink-0" />
+              <span>Verificando coordenadas GPS dentro del cerco del proyecto...</span>
+            </div>
+          )}
+
           {errorCamara && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-3 flex items-start gap-2">
+            <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-3 flex items-start gap-2 font-semibold">
               <AlertCircle size={16} className="shrink-0 mt-0.5" />
               <span>{errorCamara}</span>
             </div>
